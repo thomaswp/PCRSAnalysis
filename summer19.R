@@ -1,16 +1,46 @@
 source("util.R")
 
 loadData <- function() {
-  survey <- read.qualtrics("data/review.csv")
+  surveyReview <- read.qualtrics("data/review.csv")
+  surveyWk10 <- read.qualtrics("data/week10.csv")
   attempts <- read.csv("data/python_problems_anon.csv", header=T)
   
-  survey <- survey[survey$user_id %in% attempts$user_id,]
+  surveyReview <- surveyReview[surveyReview$user_id %in% attempts$user_id,]
+  surveyWk10 <- surveyWk10[surveyWk10$user_id %in% attempts$user_id,]
+  
   attempts <- attempts[order(attempts$id),]
   attempts$has_best_score <- attempts$has_best_score == "t"
 }
 
+# Run me line by line
+analyzeAllWk10 <- function() {
+  test <- analyzeAttempts(surveyWk10, attempts, 63, 61)
+  test$attemptsRank <- rank(test$nAttempts)
+  summary(lm(nAttempts ~ showCC * showBlanks, data=test))
+  summary(lm(attemptsRank ~ showCC * showBlanks, data=test))
+  summary(lm(Q25 ~ showCC * showBlanks, data=test))
+}
 
-analyzeRatings <- function() {
+# Run me line by line
+analyzeAllReview <- function() {
+  test <- rbind(
+    analyzeAttempts(surveyReview, attempts, 148, 147),
+    analyzeAttempts(surveyReview, attempts, 150, 149),
+    analyzeAttempts(surveyReview, attempts, 152, 151)
+  )
+  
+  ddply(test, c("showCC", "showBlanks"), summarize, percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
+  anova(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test))
+  summary(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test))
+  fisher.test(xor(test$showCC, test$showBlanks), test$firstCorrect)
+  summary(glm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test, family=binomial()))
+  
+  
+  anova(lm(Q25 ~ showCC * showBlanks + as.factor(problem_id), data=test))
+}
+
+
+analyzeRatings <- function(survey) {
   #Overall positive ratings
   hist(survey$Q25)
   mean(is.na(survey$Q25))
@@ -29,25 +59,10 @@ analyzeRatings <- function() {
   summary(aov(Q25 ~ showCC * showBlanks, data=survey))
 }
 
-analyzeAttempts <- function(survey, attempts, problemID) {
-  performance <- summarizeAttemtps(attempts, problemID, problemID-1)
+analyzeAttempts <- function(survey, attempts, problemID, last_problem_id) {
+  performance <- summarizeAttemtps(attempts, problemID, last_problem_id)
   survey$last_problem_id <- survey$problem_id
   merge(survey[,c("user_id", "last_problem_id", "showCC", "showBlanks", "Q25")], performance, by=c("user_id", "last_problem_id"))
-}
-
-analyzeAllAttempts <- function() {
-  test <- rbind(
-    analyzeAttempts(survey, attempts, 148),
-    analyzeAttempts(survey, attempts, 150),
-    analyzeAttempts(survey, attempts, 152)
-  )
-  
-  anova(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test))
-  summary(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test))
-  fisher.test(xor(test$showCC, test$showBlanks), test$firstCorrect)
-  summary(glm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test, family=binomial()))
-  
-  ddply(test, c("showCC", "showBlanks"), summarize, percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
 }
 
 summarizeAttemtps <- function(attempts, problem_id, last_problem_id) {

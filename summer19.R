@@ -1,15 +1,28 @@
 source("util.R")
 
+# Run me line by line
 loadData <- function() {
   surveyReview <- read.qualtrics("data/review.csv")
   surveyWk10 <- read.qualtrics("data/week10.csv")
   attempts <- read.csv("data/python_problems_anon.csv", header=T)
+  consent <- read.csv("data/consent_info.csv", header=T)
+  consented <- consent$user_id[consent$consentrecode==1]
   
+  attempts <- attempts[attempts$user_id %in% consented,]
   surveyReview <- surveyReview[surveyReview$user_id %in% attempts$user_id,]
   surveyWk10 <- surveyWk10[surveyWk10$user_id %in% attempts$user_id,]
   
-  attempts <- attempts[order(attempts$id),]
+  attempts$showCC <- grepl("showCC=0", attempts$text, fixed=T)
+  attempts$showBlanks <- grepl("showBlanks=0", attempts$text, fixed=T)
+  
+  attempts$timestamp <- as.POSIXct(strptime(sub(":([0-9]{2})$", "\\1", as.character(attempts$timestamp)), "%Y-%m-%d %H:%M:%OS%z"))
+  
+  attempts <- attempts[order(attempts$timestamp),]
   attempts$has_best_score <- attempts$has_best_score == "t"
+  
+  # this filterting doesn't work, since the duplicates vary in the condition, etc.
+  oldAttempts <- attempts
+  filtered <- attempts[!duplicated(attempts[,c("id", "timestamp")]),]
 }
 
 # Run me line by line
@@ -62,18 +75,22 @@ analyzeRatings <- function(survey) {
 analyzeAttempts <- function(survey, attempts, problemID, last_problem_id) {
   performance <- summarizeAttemtps(attempts, problemID, last_problem_id)
   survey$last_problem_id <- survey$problem_id
-  merge(survey[,c("user_id", "last_problem_id", "showCC", "showBlanks", "Q25")], performance, by=c("user_id", "last_problem_id"))
+  merge(survey[,c("user_id", "last_problem_id", "showCC", "showBlanks", "Q25")], performance, by=c("user_id", "last_problem_id"), all.y=T)
 }
 
 summarizeAttemtps <- function(attempts, problem_id, last_problem_id) {
   problemAttempts <- attempts[attempts$problem_id == problem_id,]
+  lastProblemAttempts <- attempts[attempts$problem_id == last_problem_id,]
   df <- NA
   for (user_id in unique(problemAttempts$user_id)) {
     userAttempts <- problemAttempts[problemAttempts$user_id == user_id,]
+    userLastAttempts <- lastProblemAttempts[lastProblemAttempts$user_id == user_id,]
     df <- rbind(df, data.frame(
       problem_id = problem_id,
       last_problem_id = last_problem_id,
       user_id = user_id,
+      showCC = any(userLastAttempts$showCC),
+      showBlanks = any(userLastAttempts$showBlanks),
       nAttempts = nrow(userAttempts),
       firstCorrect = first(userAttempts$has_best_score),
       everCorrect = any(userAttempts$has_best_score)

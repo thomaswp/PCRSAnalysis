@@ -4,7 +4,7 @@ source("util.R")
 loadData <- function() {
   surveyReview <- read.qualtrics("data/review.csv")
   surveyWk10 <- read.qualtrics("data/week10.csv")
-  attempts <- read.csv("data/python_problems_anon.csv", header=T)
+  attempts <- read.csv("data/python_problems_anon_aug7.csv", header=T)
   consent <- read.csv("data/consent_info.csv", header=T)
   consented <- consent$user_id[consent$consentrecode==1]
   
@@ -12,8 +12,8 @@ loadData <- function() {
   surveyReview <- surveyReview[surveyReview$user_id %in% attempts$user_id,]
   surveyWk10 <- surveyWk10[surveyWk10$user_id %in% attempts$user_id,]
   
-  attempts$showCC <- grepl("showCC=0", attempts$text, fixed=T)
-  attempts$showBlanks <- grepl("showBlanks=0", attempts$text, fixed=T)
+  attempts$showCC <- grepl("showCC=1", attempts$text, fixed=T)
+  attempts$showBlanks <- grepl("showBlanks=1", attempts$text, fixed=T)
   
   attempts$timestamp <- as.POSIXct(strptime(sub(":([0-9]{2})$", "\\1", as.character(attempts$timestamp)), "%Y-%m-%d %H:%M:%OS%z"))
   
@@ -48,6 +48,23 @@ analyzeAllReview <- function() {
   fisher.test(xor(test$showCC, test$showBlanks), test$firstCorrect)
   summary(glm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test, family=binomial()))
   
+  fisher.test(test$showBlanks[!test$showCC], test$firstCorrect[!test$showCC])
+  
+  test$cond <- paste0(test$showCC, test$showBlanks)
+  ggplot(test, aes(y=0+firstCorrect, x=cond)) + stat_summary(
+    geom = "point",
+    fun.y = "mean",
+    col = "black",
+    size = 3,
+    shape = 24,
+    fill = "red"
+  ) + facet_wrap(~ problem_id) + scale_y_continuous(limits=c(0,1))
+    
+  stats <- ddply(test, c("showCC", "showBlanks", "problem_id"), summarize, n=length(showCC),
+                 percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
+  ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
+    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) +
+    facet_grid(problem_id ~ .) + scale_y_continuous(limits=c(0,1))
   
   anova(lm(Q25 ~ showCC * showBlanks + as.factor(problem_id), data=test))
 }
@@ -75,7 +92,11 @@ analyzeRatings <- function(survey) {
 analyzeAttempts <- function(survey, attempts, problemID, last_problem_id) {
   performance <- summarizeAttemtps(attempts, problemID, last_problem_id)
   survey$last_problem_id <- survey$problem_id
-  merge(survey[,c("user_id", "last_problem_id", "showCC", "showBlanks", "Q25")], performance, by=c("user_id", "last_problem_id"), all.y=T)
+  merged <- merge(survey[,c("user_id", "last_problem_id", "showCC", "showBlanks", "Q25")], performance, 
+                  by=c("user_id", "last_problem_id"), all.y=T)
+  merged$showCC <- ifNA(merged$showCC.x, merged$showCC.y)
+  merged$showBlanks <- ifNA(merged$showBlanks.x, merged$showBlanks.y)
+  return (merged)
 }
 
 summarizeAttemtps <- function(attempts, problem_id, last_problem_id) {
@@ -89,6 +110,7 @@ summarizeAttemtps <- function(attempts, problem_id, last_problem_id) {
       problem_id = problem_id,
       last_problem_id = last_problem_id,
       user_id = user_id,
+      # TODO: Should be a better system than just true if any is true!
       showCC = any(userLastAttempts$showCC),
       showBlanks = any(userLastAttempts$showBlanks),
       nAttempts = nrow(userAttempts),

@@ -40,6 +40,10 @@ first <- function(x) head(x, 1)
 last <- function(x) tail(x, 1)
 
 se <- function(x) sqrt(var(x, na.rm=T)/sum(!is.na(x)))
+
+se.prop <- function(prop, n) sqrt(prop * (1 - prop) / n)
+se.prop.vec <- function(x) se.prop(mean(x), length(x))
+
 first <- function(x) {
   if (length(x) == 0) return (NA)
   return (x[1])

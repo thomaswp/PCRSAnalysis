@@ -10,19 +10,23 @@ loadData <- function() {
   
   attempts <- attempts[attempts$user_id %in% consented,]
   surveyReview <- surveyReview[surveyReview$user_id %in% attempts$user_id,]
+  surveyReview <- cleanSurvey(surveyReview)
   surveyWk10 <- surveyWk10[surveyWk10$user_id %in% attempts$user_id,]
+  surveyWk10 <- cleanSurvey(surveyWk10)
   
-  attempts$showCC <- grepl("showCC=1", attempts$text, fixed=T)
-  attempts$showBlanks <- grepl("showBlanks=1", attempts$text, fixed=T)
+  attempts$showCC <- ifelse(attempts$text == "", NA, grepl("showCC=1", attempts$text, fixed=T))
+  attempts$showBlanks <- ifelse(attempts$text == "", NA, grepl("showBlanks=1", attempts$text, fixed=T))
   
   attempts$timestamp <- as.POSIXct(strptime(sub(":([0-9]{2})$", "\\1", as.character(attempts$timestamp)), "%Y-%m-%d %H:%M:%OS%z"))
   
   attempts <- attempts[order(attempts$timestamp),]
-  attempts$has_best_score <- attempts$has_best_score == "t"
-  
-  # this filterting doesn't work, since the duplicates vary in the condition, etc.
-  oldAttempts <- attempts
-  filtered <- attempts[!duplicated(attempts[,c("id", "timestamp")]),]
+  attempts$has_best_score <- attempts$score == attempts$max_score
+}
+
+cleanSurvey <- function(survey) {
+  survey <- survey[order(survey$StartDate),]
+  survey <- survey[!duplicated(survey[,c("user_id", "problem_id")]),]
+  survey
 }
 
 # Run me line by line
@@ -32,26 +36,38 @@ analyzeAllWk10 <- function() {
   summary(lm(nAttempts ~ showCC * showBlanks, data=test))
   summary(lm(attemptsRank ~ showCC * showBlanks, data=test))
   summary(lm(Q25 ~ showCC * showBlanks, data=test))
+  
+  
 }
 
 # Run me line by line
 analyzeAllReview <- function() {
-  test <- rbind(
+  review <- rbind(
     analyzeAttempts(surveyReview, attempts, 148, 147),
     analyzeAttempts(surveyReview, attempts, 150, 149),
     analyzeAttempts(surveyReview, attempts, 152, 151)
   )
   
-  ddply(test, c("showCC", "showBlanks"), summarize, percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
-  anova(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test))
-  summary(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test))
-  fisher.test(xor(test$showCC, test$showBlanks), test$firstCorrect)
-  summary(glm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=test, family=binomial()))
+  ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problem_id)
   
-  fisher.test(test$showBlanks[!test$showCC], test$firstCorrect[!test$showCC])
+  mean((review$showCC.x == review$showCC.y)[!is.na(review$showCC.x) & !is.na(review$showCC.y)])
   
-  test$cond <- paste0(test$showCC, test$showBlanks)
-  ggplot(test, aes(y=0+firstCorrect, x=cond)) + stat_summary(
+  review <- review[!is.na(review$showCC) & !is.na(review$showBlanks),]
+  review <- review[!is.na(review$showCC) & !is.na(review$showBlanks),]
+  
+  # remove
+  # review <- review[!is.na(review$showCC.x) & !is.na(review$showBlanks.x),]
+  
+  ddply(review, c("showCC", "showBlanks"), summarize, percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
+  anova(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=review))
+  summary(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=review))
+  fisher.test(xor(review$showCC, review$showBlanks), review$firstCorrect)
+  summary(glm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=review, family=binomial()))
+  
+  fisher.test(review$showBlanks[!review$showCC], review$firstCorrect[!review$showCC])
+  
+  review$cond <- paste0(review$showCC, review$showBlanks)
+  ggplot(review, aes(y=0+firstCorrect, x=cond)) + stat_summary(
     geom = "point",
     fun.y = "mean",
     col = "black",
@@ -60,13 +76,15 @@ analyzeAllReview <- function() {
     fill = "red"
   ) + facet_wrap(~ problem_id) + scale_y_continuous(limits=c(0,1))
     
-  stats <- ddply(test, c("showCC", "showBlanks", "problem_id"), summarize, n=length(showCC),
+  stats <- ddply(review, c("showCC", "showBlanks", "problem_id"), summarize, n=length(showCC),
                  percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
+  stats$se <- se.prop(stats$percFirstCorrect, stats$n)
   ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
-    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) +
+    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
+    geom_errorbar(aes(ymin=percFirstCorrect-se, ymax=percFirstCorrect+se), width=0.25, position = position_dodge(width = 1)) +
     facet_grid(problem_id ~ .) + scale_y_continuous(limits=c(0,1))
   
-  anova(lm(Q25 ~ showCC * showBlanks + as.factor(problem_id), data=test))
+  anova(lm(Q25 ~ showCC * showBlanks + as.factor(problem_id), data=review))
 }
 
 
@@ -110,9 +128,10 @@ summarizeAttemtps <- function(attempts, problem_id, last_problem_id) {
       problem_id = problem_id,
       last_problem_id = last_problem_id,
       user_id = user_id,
-      # TODO: Should be a better system than just true if any is true!
-      showCC = any(userLastAttempts$showCC),
-      showBlanks = any(userLastAttempts$showBlanks),
+      # TODO: Is first best? Also, may not work if they never got the prior one right
+      # (but then they didn't have a condition, so it doesn't matter...)
+      showCC = first(userLastAttempts$showCC[!is.na(userLastAttempts$showCC) & userLastAttempts$has_best_score]),
+      showBlanks = first(userLastAttempts$showBlanks[!is.na(userLastAttempts$showBlanks) & userLastAttempts$has_best_score]),
       nAttempts = nrow(userAttempts),
       firstCorrect = first(userAttempts$has_best_score),
       everCorrect = any(userAttempts$has_best_score)

@@ -110,16 +110,25 @@ analyzeAllReview <- function() {
     analyzeAttempts(surveyReview, attempts, 152, 151)
   )
   
-  ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problem_id)
-  
+  # Merge with problem names
+  review <- merge(review, problemNames, all.x=T)
   # Remove those with no known condition
   review <- review[!is.na(review$showCC) & !is.na(review$showBlanks),]
+  # 99% of students attempted the problem, so probably easier to remove them
+  mean(review$attempted)
+  review <- review[review$attempted,]
+  
+  ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
+  ggplot(review, aes(timeRevising)) + geom_histogram() + facet_wrap(~problemName)
+  
+  # Only run to remove all those who didn't submit survey (treatment not ITT effect)
+  review <- review[review$survey,]
   
   ddply(review, c("showCC", "showBlanks"), summarize, percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
-  anova(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=review))
-  summary(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=review))
+  anova(lm(firstCorrect ~ showCC * showBlanks + problemName, data=review))
+  summary(lm(firstCorrect ~ showCC * showBlanks + problemName, data=review))
   fisher.test(xor(review$showCC, review$showBlanks), review$firstCorrect)
-  summary(glm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=review, family=binomial()))
+  summary(glm(firstCorrect ~ showCC * showBlanks + problemName, data=review, family=binomial()))
   
   fisher.test(review$showBlanks[!review$showCC], review$firstCorrect[!review$showCC])
   
@@ -131,17 +140,21 @@ analyzeAllReview <- function() {
     size = 3,
     shape = 24,
     fill = "red"
-  ) + facet_wrap(~ problem_id) + scale_y_continuous(limits=c(0,1))
+  ) + facet_wrap(~ problemName) + scale_y_continuous(limits=c(0,1))
     
-  stats <- ddply(review, c("showCC", "showBlanks", "problem_id"), summarize, n=length(showCC),
-                 percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
-  stats$se <- se.prop(stats$percFirstCorrect, stats$n)
+  stats <- ddply(review, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
+                 percFirstCorrect=mean(firstCorrect), percEverCorrect=mean(everCorrect),
+                 meanTimeRevising=mean(timeRevising), seTimeRevising=se(timeRevising),
+                 medAttempts=median(nAttempts))
+  stats$seFC <- se.prop(stats$percFirstCorrect, stats$n)
+  stats$seEC <- se.prop(stats$percEverCorrect, stats$n)
+  
   ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
     geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
-    geom_errorbar(aes(ymin=percFirstCorrect-se, ymax=percFirstCorrect+se), width=0.25, position = position_dodge(width = 1)) +
-    facet_grid(problem_id ~ .) + scale_y_continuous(limits=c(0,1))
+    geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
+    facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1))
   
-  anova(lm(Q25 ~ showCC * showBlanks + as.factor(problem_id), data=review))
+  anova(lm(Q25 ~ showCC * showBlanks + as.factor(problemName), data=review))
 }
 
 
@@ -171,7 +184,8 @@ analyzeAttempts <- function(survey, attempts, problem_id, last_problem_id) {
   lastProblemSubmissions$last_problem_id <- lastProblemSubmissions$problem_id
   lastProblemSubmissions$problem_id <- NULL
   merged <- merge(lastProblemSubmissions, performance, 
-                  by=c("user_id", "last_problem_id"), all.y=T)
+                  by=c("user_id", "last_problem_id"), all.x=T)
+  merged$attempted <- !is.na(merged$problem_id)
   return (merged)
 }
 
@@ -186,7 +200,8 @@ summarizeAttemtps <- function(attempts, problem_id) {
       user_id = user_id,
       nAttempts = nrow(userAttempts),
       firstCorrect = first(userAttempts$is_correct),
-      everCorrect = any(userAttempts$is_correct)
+      everCorrect = any(userAttempts$is_correct),
+      timeRevising = max(userAttempts$timestamp) - min(userAttempts$timestamp)
     ))
   }
   df <- df[-1,]

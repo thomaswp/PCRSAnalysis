@@ -117,12 +117,14 @@ analyzeAllReview <- function() {
   # 99% of students attempted the problem, so probably easier to remove them
   mean(review$attempted)
   review <- review[review$attempted,]
+  review$cond <- paste0(review$showCC, review$showBlanks)
   
   ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
   ggplot(review, aes(timeRevising)) + geom_histogram() + facet_wrap(~problemName)
+  ggplot(review, aes(firstScore)) + geom_histogram() + facet_wrap(~problemName)
   
   # Only run to remove all those who didn't submit survey (treatment not ITT effect)
-  review <- review[review$survey,]
+  #review <- review[review$survey,]
   
   ddply(review, c("showCC", "showBlanks"), summarize, percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
   anova(lm(firstCorrect ~ showCC * showBlanks + problemName, data=review))
@@ -130,9 +132,11 @@ analyzeAllReview <- function() {
   fisher.test(xor(review$showCC, review$showBlanks), review$firstCorrect)
   summary(glm(firstCorrect ~ showCC * showBlanks + problemName, data=review, family=binomial()))
   
+  summary(glm(firstCorrect ~ problemName * sign(showBlanks+showCC), data=review, family=binomial()))
+  
   fisher.test(review$showBlanks[!review$showCC], review$firstCorrect[!review$showCC])
   
-  review$cond <- paste0(review$showCC, review$showBlanks)
+  
   ggplot(review, aes(y=0+firstCorrect, x=cond)) + stat_summary(
     geom = "point",
     fun.y = "mean",
@@ -141,6 +145,26 @@ analyzeAllReview <- function() {
     shape = 24,
     fill = "red"
   ) + facet_wrap(~ problemName) + scale_y_continuous(limits=c(0,1))
+  
+  ggplot(review, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
+  stat_summary(
+    geom = "point",
+    fun.y = "mean",
+    col = "black",
+    size = 3,
+    shape = 24,
+    fill = "red"
+  ) + facet_wrap(~ problemName)
+  
+  ggplot(review, aes(y=firstScore, x=cond)) + geom_boxplot() + 
+    stat_summary(
+      geom = "point",
+      fun.y = "mean",
+      col = "black",
+      size = 3,
+      shape = 24,
+      fill = "red"
+    ) + facet_wrap(~ problemName)
     
   stats <- ddply(review, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
                  percFirstCorrect=mean(firstCorrect), percEverCorrect=mean(everCorrect),
@@ -150,6 +174,11 @@ analyzeAllReview <- function() {
   stats$seEC <- se.prop(stats$percEverCorrect, stats$n)
   
   ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
+    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
+    geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
+    facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1))
+  
+  ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=meanTimeRevising)) + geom_bar(stat="identity", position="dodge") + 
     geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
     geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
     facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1))
@@ -200,6 +229,7 @@ summarizeAttemtps <- function(attempts, problem_id) {
       user_id = user_id,
       nAttempts = nrow(userAttempts),
       firstCorrect = first(userAttempts$is_correct),
+      firstScore = first(userAttempts$score),
       everCorrect = any(userAttempts$is_correct),
       timeRevising = max(userAttempts$timestamp) - min(userAttempts$timestamp)
     ))

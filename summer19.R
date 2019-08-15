@@ -1,5 +1,7 @@
 source("util.R")
 
+library(data.table)
+
 # Run me line by line
 loadData <- function() {
   surveyReview <- read.qualtrics("data/review.csv")
@@ -8,25 +10,85 @@ loadData <- function() {
   consent <- read.csv("data/consent_info.csv", header=T)
   consented <- consent$user_id[consent$consentrecode==1]
   
+  # Remove test users
+  consented <- consented[!(consented %in% c(
+    "1595da56e6817bd9334a91f32202378e168516e9efbbdcfaf32280ee90f94ae4a67a89bdff5dc5563ad955c882aee46d00bf14076f5f662b6fd3cbff15a46834",
+    "cc1713b969a02f2b21bccc5eaeca7e7688ef84835c46d31de79f805bef043dae1ac8a6a9b44857d14817de11c5b4346de7b73b790e68722a5740d7689f8e24f5",
+    "2e06db433ac102c55abf50f5cdb292c3311034530fb547458e99a527e322c24f1197b4636e8d601969e74425aa4b1ff1c5fe09c33cb35d890d28d18d4883fa0b"
+  ))]
+  
   attempts <- attempts[attempts$user_id %in% consented,]
   surveyReview <- surveyReview[surveyReview$user_id %in% attempts$user_id,]
-  surveyReview <- cleanSurvey(surveyReview)
+  # Qualtrics timezone is off by 2 hours... :P
+  surveyReview$StartDate <- surveyReview$StartDate + 2*60*60
+  surveyReview$EndDate <- surveyReview$EndDate + 2*60*60
+  # surveyReview <- cleanSurvey(surveyReview)
   surveyWk10 <- surveyWk10[surveyWk10$user_id %in% attempts$user_id,]
-  surveyWk10 <- cleanSurvey(surveyWk10)
+  surveyWk10$StartDate <- surveyWk10$StartDate + 2*60*60
+  surveyWk10$EndDate <- surveyWk10$EndDate + 2*60*60
+  # surveyWk10 <- cleanSurvey(surveyWk10)
   
   attempts$showCC <- ifelse(attempts$text == "", NA, grepl("showCC=1", attempts$text, fixed=T))
   attempts$showBlanks <- ifelse(attempts$text == "", NA, grepl("showBlanks=1", attempts$text, fixed=T))
+  attempts$hasURL <- !is.na(attempts$showCC) & !is.na(attempts$showBlanks)
   
   attempts$timestamp <- as.POSIXct(strptime(sub(":([0-9]{2})$", "\\1", as.character(attempts$timestamp)), "%Y-%m-%d %H:%M:%OS%z"))
   
   attempts <- attempts[order(attempts$timestamp),]
-  attempts$has_best_score <- attempts$score == attempts$max_score
+  attempts$is_correct <- attempts$score == attempts$max_score
+  
+  problemNames <- data.frame(
+    problem_id=c(147, 148, 149, 150, 151, 152),
+    problemName=c("2A_Find_outliers", "2B_Get_short_heights", "3A_Discount", "3B_Discount", "1A_Average_height", "1B_Average_even")
+  )
+}
+
+mergeSurveyAttempts <- function(attempts, survey, problem_id) {
+  pAttempts <- attempts[attempts$problem_id == problem_id & attempts$is_correct,] # & attempts$hasURL,]
+  qSubmissions <- survey[survey$problem_id == problem_id,]
+  
+  z <- lapply(intersect(pAttempts$user_id,qSubmissions$user_id), function(id) {
+    d1 <- subset(qSubmissions, user_id==id)
+    d2 <- subset(pAttempts, user_id==id)
+    
+    print(min(d1$StartDate - d2$timestamp[1]))
+    
+    # For each survey attempt, find the closest earlier submission attempt
+    d1$indices <- sapply(d1$StartDate,function(d) which.min(abs(d2$timestamp[d2$timestamp < d] - d)))
+    d2$indices <- 1:nrow(d2)
+    
+    # Take the first one that matches
+    # TODO: May need to sort the matches by timestamp
+    merged <- merge(d1,d2,by=c('user_id','indices'))
+    merged <- merged[order(merged$timestamp),]
+    merged[1,]
+  })
+  
+  z2 <- do.call(rbind,z)
+  z2$indices <- NULL
+  
+  print(mean((z2$showBlanks.x == z2$showBlanks.y)[!is.na(z2$showBlanks.y)]))
+  print(mean((z2$showCC.x == z2$showCC.y)[!is.na(z2$showCC.y)]))
+  
+  z2$showCC <- z2$showCC.x
+  z2$showBlanks <- z2$showBlanks.x
+  z2$survey <- T
+  
+  noSubmit <- attempts[attempts$problem_id == problem_id & attempts$is_correct & !(attempts$user_id %in% z2$user_id),]
+  noSubmit <- noSubmit[order(noSubmit$timestamp),]
+  noSubmit <- noSubmit[!duplicated(noSubmit$user_id),]  
+  noSubmit$survey <- F
+  
+  correct <- rbind.fill(z2, noSubmit)
+  correct <- correct[,c("user_id", "problem_id", "showCC", "showBlanks", "Q25", "Q38", "Q41", "Q43")]
+  correct$problem_id <- problem_id
+  correct$survey <- !is.na(correct$Q25)
+  correct
 }
 
 cleanSurvey <- function(survey) {
   survey <- survey[order(survey$StartDate),]
   survey <- survey[!duplicated(survey[,c("user_id", "problem_id")]),]
-  survey
 }
 
 # Run me line by line
@@ -50,13 +112,8 @@ analyzeAllReview <- function() {
   
   ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problem_id)
   
-  mean((review$showCC.x == review$showCC.y)[!is.na(review$showCC.x) & !is.na(review$showCC.y)])
-  
+  # Remove those with no known condition
   review <- review[!is.na(review$showCC) & !is.na(review$showBlanks),]
-  review <- review[!is.na(review$showCC) & !is.na(review$showBlanks),]
-  
-  # remove
-  # review <- review[!is.na(review$showCC.x) & !is.na(review$showBlanks.x),]
   
   ddply(review, c("showCC", "showBlanks"), summarize, percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
   anova(lm(firstCorrect ~ showCC * showBlanks + as.factor(problem_id), data=review))
@@ -107,34 +164,29 @@ analyzeRatings <- function(survey) {
   summary(aov(Q25 ~ showCC * showBlanks, data=survey))
 }
 
-analyzeAttempts <- function(survey, attempts, problemID, last_problem_id) {
-  performance <- summarizeAttemtps(attempts, problemID, last_problem_id)
-  survey$last_problem_id <- survey$problem_id
-  merged <- merge(survey[,c("user_id", "last_problem_id", "showCC", "showBlanks", "Q25")], performance, 
+analyzeAttempts <- function(survey, attempts, problem_id, last_problem_id) {
+  lastProblemSubmissions <- mergeSurveyAttempts(attempts, survey, last_problem_id)
+  performance <- summarizeAttemtps(attempts, problem_id)
+  performance$last_problem_id <- last_problem_id
+  lastProblemSubmissions$last_problem_id <- lastProblemSubmissions$problem_id
+  lastProblemSubmissions$problem_id <- NULL
+  merged <- merge(lastProblemSubmissions, performance, 
                   by=c("user_id", "last_problem_id"), all.y=T)
-  merged$showCC <- ifNA(merged$showCC.x, merged$showCC.y)
-  merged$showBlanks <- ifNA(merged$showBlanks.x, merged$showBlanks.y)
   return (merged)
 }
 
-summarizeAttemtps <- function(attempts, problem_id, last_problem_id) {
+summarizeAttemtps <- function(attempts, problem_id) {
   problemAttempts <- attempts[attempts$problem_id == problem_id,]
-  lastProblemAttempts <- attempts[attempts$problem_id == last_problem_id,]
   df <- NA
   for (user_id in unique(problemAttempts$user_id)) {
     userAttempts <- problemAttempts[problemAttempts$user_id == user_id,]
-    userLastAttempts <- lastProblemAttempts[lastProblemAttempts$user_id == user_id,]
+    
     df <- rbind(df, data.frame(
       problem_id = problem_id,
-      last_problem_id = last_problem_id,
       user_id = user_id,
-      # TODO: Is first best? Also, may not work if they never got the prior one right
-      # (but then they didn't have a condition, so it doesn't matter...)
-      showCC = first(userLastAttempts$showCC[!is.na(userLastAttempts$showCC) & userLastAttempts$has_best_score]),
-      showBlanks = first(userLastAttempts$showBlanks[!is.na(userLastAttempts$showBlanks) & userLastAttempts$has_best_score]),
       nAttempts = nrow(userAttempts),
-      firstCorrect = first(userAttempts$has_best_score),
-      everCorrect = any(userAttempts$has_best_score)
+      firstCorrect = first(userAttempts$is_correct),
+      everCorrect = any(userAttempts$is_correct)
     ))
   }
   df <- df[-1,]

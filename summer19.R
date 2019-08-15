@@ -167,20 +167,19 @@ analyzeAllReview <- function() {
     ) + facet_wrap(~ problemName)
     
   stats <- ddply(review, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
-                 percFirstCorrect=mean(firstCorrect), percEverCorrect=mean(everCorrect),
-                 meanTimeRevising=mean(timeRevising), seTimeRevising=se(timeRevising),
+                 percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),
+                 percEverCorrect=mean(everCorrect),seFE=se.prop(percEverCorrect, n),
+                 percSubmitted=mean(survey), seSV=se.prop(percSubmitted, n),
                  medAttempts=median(nAttempts))
-  stats$seFC <- se.prop(stats$percFirstCorrect, stats$n)
-  stats$seEC <- se.prop(stats$percEverCorrect, stats$n)
   
   ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
     geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
     geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
     facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1))
   
-  ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=meanTimeRevising)) + geom_bar(stat="identity", position="dodge") + 
+  ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percSubmitted)) + geom_bar(stat="identity", position="dodge") + 
     geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
-    geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
+    geom_errorbar(aes(ymin=percSubmitted-seSV, ymax=percSubmitted+seSV), width=0.25, position = position_dodge(width = 1)) +
     facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1))
   
   anova(lm(Q25 ~ showCC * showBlanks + as.factor(problemName), data=review))

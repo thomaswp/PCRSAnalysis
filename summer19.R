@@ -80,7 +80,8 @@ mergeSurveyAttempts <- function(attempts, survey, problem_id) {
   noSubmit$survey <- F
   
   correct <- rbind.fill(z2, noSubmit)
-  correct <- correct[,c("user_id", "problem_id", "showCC", "showBlanks", "Q25", "Q38", "Q41", "Q43")]
+  correct <- correct[,intersect(names(correct), 
+                                c("user_id", "problem_id", "showCC", "showBlanks", "Q25", "Q38", "Q41", "Q43"))]
   correct$problem_id <- problem_id
   correct$survey <- !is.na(correct$Q25)
   correct
@@ -154,7 +155,9 @@ analyzeAllReview <- function() {
     size = 3,
     shape = 24,
     fill = "red"
-  ) + facet_wrap(~ problemName)
+  ) + 
+  stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
+  facet_wrap(~ problemName)
   
   ggplot(review, aes(y=firstScore, x=cond)) + geom_boxplot() + 
     stat_summary(
@@ -164,7 +167,8 @@ analyzeAllReview <- function() {
       size = 3,
       shape = 24,
       fill = "red"
-    ) + facet_wrap(~ problemName)
+    ) + stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
+    facet_wrap(~ problemName)
     
   stats <- ddply(review, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
                  percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),

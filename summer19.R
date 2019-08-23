@@ -38,8 +38,9 @@ loadData <- function() {
   attempts$is_correct <- attempts$score == attempts$max_score
   
   problemNames <- data.frame(
-    problem_id=c(147, 148, 149, 150, 151, 152),
-    problemName=c("2A_Find_outliers", "2B_Get_short_heights", "3A_Discount", "3B_Discount", "1A_Average_height", "1B_Average_even")
+    problem_id=c(147, 148, 149, 150, 151, 152, 42, 61, 63),
+    problemName=c("2A_Find_outliers", "2B_Get_short_heights", "3A_Discount", "3B_Discount", "1A_Average_height", "1B_Average_even",
+                  "1A_List_of_indexes", "2A_Bubble_bubble", "2B_Inserting_into_list")
   )
 }
 
@@ -80,8 +81,8 @@ mergeSurveyAttempts <- function(attempts, survey, problem_id) {
   noSubmit$survey <- F
   
   correct <- rbind.fill(z2, noSubmit)
-  correct <- correct[,intersect(names(correct), 
-                                c("user_id", "problem_id", "showCC", "showBlanks", "Q25", "Q38", "Q41", "Q43"))]
+  correct <- correct[,intersect(names(correct), names(survey))]
+                                #c("user_id", "problem_id", "showCC", "showBlanks", "Q25", "Q38", "Q41", "Q43"))]
   correct$problem_id <- problem_id
   correct$survey <- !is.na(correct$Q25)
   correct
@@ -94,13 +95,62 @@ cleanSurvey <- function(survey) {
 
 # Run me line by line
 analyzeAllWk10 <- function() {
-  test <- analyzeAttempts(surveyWk10, attempts, 63, 61)
-  test$attemptsRank <- rank(test$nAttempts)
-  summary(lm(nAttempts ~ showCC * showBlanks, data=test))
-  summary(lm(attemptsRank ~ showCC * showBlanks, data=test))
-  summary(lm(Q25 ~ showCC * showBlanks, data=test))
+  wk10A <- analyzeAttempts(surveyWk10, attempts, 63, 42)
+  wk10A$showCC42 <- wk10A$showCC
+  wk10A$showBlanks42 <- wk10A$showBlanks
+  wk10B <- analyzeAttempts(surveyWk10, attempts, 63, 61)
   
+  wk10 <- merge(wk10A[,c("user_id", "showCC42", "showBlanks42")], wk10B, all.y=T)
   
+  # Merge with problem names
+  wk10 <- merge(wk10, problemNames, all.x=T)
+  # Remove those with no known condition
+  wk10 <- wk10[!is.na(wk10$showCC) & !is.na(wk10$showBlanks),]
+  # 98% of students attempted the problem, so probably easier to remove them
+  mean(wk10$attempted)
+  wk10 <- wk10[wk10$attempted,]
+}
+ 
+drawPlots <- function() {
+  
+  # Choose a dataset - Run one but not both of these lines
+  dataset <- wk10
+  dataset <- review
+  
+  dataset$cond <- paste0(ifelse(dataset$showCC==0, "no_cc", "cc"), "/", ifelse(dataset$showBlanks==0, "no_blanks", "blanks"))
+  dataset$cond <- ordered(dataset$cond, c("no_cc/no_blanks", "no_cc/blanks", "cc/no_blanks", "cc/blanks"))
+  
+  ggplot(dataset, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
+    facet_grid(problemName ~ .) +
+    ggtitle("Time Revising by Condition")
+  
+  ggplot(dataset, aes(y=firstScore, x=cond)) + geom_boxplot() + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
+    facet_grid(problemName ~ .) +
+    ggtitle("First Score (tests passed) by Condition")
+  
+  stats <- ddply(dataset, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
+                 percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),
+                 percEverCorrect=mean(everCorrect),seFE=se.prop(percEverCorrect, n),
+                 percSubmitted=mean(survey), seSV=se.prop(percSubmitted, n),
+                 medAttempts=median(nAttempts),
+                 corSurveyFirstCorrect=cor(firstCorrect,survey),
+                 fisherSurveyFirstCorrect=fisher.test(firstCorrect,survey)$p.value)
+  
+  ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
+    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
+    geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
+    facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1)) +
+    ggtitle("Percent Correct of First Try")
+  
+  ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percSubmitted)) + geom_bar(stat="identity", position="dodge") + 
+    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
+    geom_errorbar(aes(ymin=percSubmitted-seSV, ymax=percSubmitted+seSV), width=0.25, position = position_dodge(width = 1)) +
+    facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1)) +
+    ggtitle("Percent Completed Survey")
 }
 
 # Run me line by line
@@ -118,7 +168,6 @@ analyzeAllReview <- function() {
   # 99% of students attempted the problem, so probably easier to remove them
   mean(review$attempted)
   review <- review[review$attempted,]
-  review$cond <- paste0(review$showCC, review$showBlanks)
   
   ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
   ggplot(review, aes(timeRevising)) + geom_histogram() + facet_wrap(~problemName)

@@ -120,10 +120,20 @@ drawPlots <- function() {
   dataset$cond <- paste0(ifelse(dataset$showCC==0, "no_cc", "cc"), "/", ifelse(dataset$showBlanks==0, "no_blanks", "blanks"))
   dataset$cond <- ordered(dataset$cond, c("no_cc/no_blanks", "no_cc/blanks", "cc/no_blanks", "cc/blanks"))
   
+  ggplot(dataset, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
+  
+  ddply(dataset, "problemName", summarize, medAttempts=median(nAttempts), meanAttempts=mean(nAttempts))
+  
   ggplot(dataset, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
     facet_grid(problemName ~ .) +
+    ggtitle("Time Revising by Condition")
+  
+  ggplot(dataset, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
+    #facet_grid(problemName ~ .) +
     ggtitle("Time Revising by Condition")
   
   ggplot(dataset, aes(y=firstScore, x=cond)) + geom_boxplot() + 
@@ -151,6 +161,31 @@ drawPlots <- function() {
     geom_errorbar(aes(ymin=percSubmitted-seSV, ymax=percSubmitted+seSV), width=0.25, position = position_dodge(width = 1)) +
     facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1)) +
     ggtitle("Percent Completed Survey")
+  
+  
+  statsSurvey <- ddply(dataset[dataset$survey,], c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
+                 percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),
+                 percEverCorrect=mean(everCorrect),seFE=se.prop(percEverCorrect, n),
+                 medAttempts=median(nAttempts))
+  
+  ggplot(statsSurvey, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
+    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
+    geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
+    facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1)) +
+    ggtitle("Percent Correct of First Try (submitted survey only)")
+  
+  statsAll <- ddply(dataset, c("showCC", "showBlanks"), summarize, n=length(showCC),
+                 percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),
+                 percEverCorrect=mean(everCorrect),seFE=se.prop(percEverCorrect, n),
+                 percSubmitted=mean(survey), seSV=se.prop(percSubmitted, n),
+                 medAttempts=median(nAttempts),
+                 corSurveyFirstCorrect=cor(firstCorrect,survey),
+                 fisherSurveyFirstCorrect=fisher.test(firstCorrect,survey)$p.value)
+  
+  ggplot(statsAll, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
+    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
+    geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
+    ggtitle("Percent Correct of First Try")
 }
 
 # Run me line by line

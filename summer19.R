@@ -117,11 +117,13 @@ drawPlots <- function() {
   dataset <- wk10
   dataset <- review
   
+  dataset$timeRevising <- as.numeric(dataset$timeRevising)
+  dataset$showBlanks <- dataset$showBlanks == 1
+  dataset$showCC <- dataset$showCC == 1
   dataset$cond <- paste0(ifelse(dataset$showCC==0, "no_cc", "cc"), "/", ifelse(dataset$showBlanks==0, "no_blanks", "blanks"))
   dataset$cond <- ordered(dataset$cond, c("no_cc/no_blanks", "no_cc/blanks", "cc/no_blanks", "cc/blanks"))
   
   ggplot(dataset, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
-  
   ddply(dataset, "problemName", summarize, medAttempts=median(nAttempts), meanAttempts=mean(nAttempts))
   
   ggplot(dataset, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
@@ -130,10 +132,27 @@ drawPlots <- function() {
     facet_grid(problemName ~ .) +
     ggtitle("Time Revising by Condition")
   
+
+  
+  # For testing how Anova works
+  # m1 <- lm(timeRevising ~ showCC * showBlanks, data=dataset)
+  # m2 <- lm(timeRevising ~ showCC * showBlanks + problem_id, data=dataset)
+  # anova(m1, m2)
+  
+  timeStats <- ddply(dataset, "problem_id", summarize, mTime = mean(timeRevising), sdTime = sd(timeRevising))
+  dataset <- merge(dataset, timeStats)
+  dataset$normTR <- (dataset$timeRevising - dataset$mTime) / dataset$sdTime
+  hist(dataset$normTR)
+  dataset$rankTR <- rank(dataset$normTR)
+  
+  summary(lm(normTR ~ showCC * showBlanks, data=dataset))
+  condCompare(dataset$normTR, dataset$showBlanks)
+  condCompare(dataset$normTR, dataset$showBlanks, filter=!dataset$showCC)
+  condCompare(dataset$normTR, dataset$showBlanks, filter=dataset$showCC)
+  
   ggplot(dataset, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
-    #facet_grid(problemName ~ .) +
     ggtitle("Time Revising by Condition")
   
   ggplot(dataset, aes(y=firstScore, x=cond)) + geom_boxplot() + 

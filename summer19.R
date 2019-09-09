@@ -3,6 +3,8 @@ source("util.R")
 library(data.table)
 library(car)
 
+options(contrasts = c("contr.sum","contr.poly"))
+
 # Run me line by line
 loadData <- function() {
   surveyReview <- read.qualtrics("data/review.csv")
@@ -118,40 +120,44 @@ drawPlots <- function() {
   dataset <- wk10
   dataset <- review
   
-  dataset$timeRevising <- as.numeric(dataset$timeRevising)
   dataset$showBlanks <- dataset$showBlanks == 1
   dataset$showCC <- dataset$showCC == 1
   dataset$cond <- paste0(ifelse(dataset$showCC==0, "no_cc", "cc"), "/", ifelse(dataset$showBlanks==0, "no_blanks", "blanks"))
   dataset$cond <- ordered(dataset$cond, c("no_cc/no_blanks", "no_cc/blanks", "cc/no_blanks", "cc/blanks"))
   
-  ggplot(dataset, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
-  ddply(dataset, "problemName", summarize, medAttempts=median(nAttempts), meanAttempts=mean(nAttempts))
+  timeStats <- ddply(dataset, "problem_id", summarize, mTime = mean(timeWorking, na.rm=T), sdTime = sd(timeWorking, na.rm=T),
+                                                       medLastTime = median(lastTimeRevising))
+  dataset <- merge(dataset, timeStats)
+  dataset$normTW <- (dataset$timeWorking - dataset$mTime) / dataset$sdTime
+  hist(dataset$normTW)
+  dataset$lastTop50 <- dataset$lastTimeRevising <= dataset$medLastTime
   
-  ggplot(dataset, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
+  ggplot(dataset, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
+  ddply(dataset, "problemName", summarize, medAttempts=median(nAttempts), meanAttempts=mean(nAttempts), medTR = median(timeRevising))
+  
+  ggplot(dataset, aes(y=normTW, x=cond)) + geom_boxplot() + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
+    ggtitle("Time Revising by Condition")
+  
+  ggplot(dataset, aes(y=normTW, x=cond)) + geom_boxplot() + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
     facet_grid(problemName ~ .) +
     ggtitle("Time Revising by Condition")
-  
-
   
   # For testing how Anova works
   # m1 <- lm(timeRevising ~ showCC * showBlanks, data=dataset)
   # m2 <- lm(timeRevising ~ showCC * showBlanks + problem_id, data=dataset)
   # anova(m1, m2)
   
-  timeStats <- ddply(dataset, "problem_id", summarize, mTime = mean(timeRevising), sdTime = sd(timeRevising))
-  dataset <- merge(dataset, timeStats)
-  dataset$normTR <- (dataset$timeRevising - dataset$mTime) / dataset$sdTime
-  hist(dataset$normTR)
-  dataset$rankTR <- rank(dataset$normTR)
-  
   kruskal.test(dataset$normTR, dataset$cond)
   kruskal.test(dataset$timeRevising, dataset$cond)
   summary(lm(timeRevising ~ showCC * showBlanks + problem_id, data=dataset))
   summary(lm(normTR ~ showCC * showBlanks, data=dataset))
   # Report this
-  Anova(lm(normTR ~ showCC * showBlanks, data=dataset),type = 3)
+  Anova(lm(normTW ~ showCC * showBlanks, data=dataset),type = 3)
+  raov(normTR ~ showCC * showBlanks, data=dataset)
   condCompare(dataset$normTR, dataset$showBlanks, test=t.test)
   condCompare(dataset$normTR, dataset$showBlanks, filter=!dataset$showCC, test=t.test)
   condCompare(dataset$normTR, dataset$showBlanks, filter=dataset$showCC)
@@ -161,14 +167,24 @@ drawPlots <- function() {
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
     ggtitle("Time Revising by Condition")
   
-  summary(lm(rating ~ showCC * showBlanks, data=dataset))
+  Anova(lm(rating ~ showCC * showBlanks, data=dataset),type = 3)
+  raov(rating ~ showCC * showBlanks, data=dataset)
   
   ggplot(dataset, aes(y=rating, x=cond)) + geom_boxplot() + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
     ggtitle("Rating")
   
-  summary(lm(survey ~ showCC * showBlanks + problem_id, data=dataset))
+  
+  chisq.test(dataset$cond, dataset$survey)
+  chisq.test(dataset[,c("survey", "showCC", "showBlanks")])
+  chisq.test(dataset$showCC, dataset$survey)
+  mean(dataset$survey[dataset$showCC])
+  mean(dataset$survey[!dataset$showCC])
+  chisq.test(dataset$showBlanks, dataset$survey)
+  mean(dataset$survey[dataset$showBlanks])
+  mean(dataset$survey[!dataset$showBlanks])
+  
   
   statsComb <- ddply(dataset, c("showCC", "showBlanks"), summarize, n=length(showCC),
                  percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),
@@ -185,11 +201,45 @@ drawPlots <- function() {
     ggtitle("Percent Completed Survey")
   
   
-  ggplot(dataset, aes(y=firstScore, x=cond)) + geom_boxplot() + 
-    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
-    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
-    facet_grid(problemName ~ .) +
-    ggtitle("First Score (tests passed) by Condition")
+  Anova(lm(firstScore ~ showCC * showBlanks, data=dataset),type = 3)
+  Anova(lm(rating ~ showCC * showBlanks, data=dataset),type = 3)
+  chisq.test(survey ~ cond, dataset[dataset$cond != "no_cc/no_blanks",])
+  
+  condCompare(dataset$firstScore*25, dataset$showBlanks, test=t.test)
+  condCompare(dataset$firstScore*25, dataset$showBlanks, filter=!dataset$showCC, test=t.test)
+  condCompare(dataset$firstScore*25, dataset$showBlanks, filter=!dataset$showCC)
+  condCompare(dataset$firstScore*25, dataset$showCC, filter=!dataset$showBlanks, test=t.test)
+  condCompare(dataset$firstScore*25, dataset$showCC, filter=!dataset$showBlanks)
+  condCompare(dataset$firstScore*25, dataset$showBlanks, filter=dataset$showCC, test=t.test)
+  condCompare(dataset$firstScore*25, dataset$showBlanks, filter=dataset$showCC)
+  condCompare(dataset$firstScore*25, dataset$showCC, filter=dataset$showBlanks)
+  compareStats(dataset$firstScore[dataset$cond == "no_cc/no_blanks"]*25, dataset$firstScore[dataset$cond == "cc/blanks"]*25, test=t.test)
+  
+  ddply(dataset, c("showCC", "showBlanks"), summarize, mTests=mean(firstScore*25), sdTests=sd(firstScore*25),
+                                                       mRating=mean(rating, na.rm=T), sdRating=sd(rating, na.rm=T),
+                                                       pComplete=mean(survey)*100)
+  
+  stat_box_data <- function(y) {
+    return( 
+      data.frame(
+        y = 0,
+        label = paste('n =', length(y))
+      )
+    )
+  }
+  ggplot(dataset, aes(y=firstScore/4, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
+    # stat_summary(fun.data = stat_box_data, geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)),
+    scale_y_continuous(labels=scales::percent, name = "Tests Passed") +
+    scale_x_discrete(name="Explicit Prompts") +
+    scale_fill_manual(name="Implicit\nPrompts", values=twoColors) +
+    #facet_grid(problemName ~ .) +
+    theme_bw() +
+    ggtitle("Test Passed on First Attempt")
+  
+  
+  
   
   stats <- ddply(dataset, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
                  percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),
@@ -255,6 +305,8 @@ analyzeAllReview <- function() {
   mean(review$attempted)
   review <- review[review$attempted,]
   review$rating <- review$Q25
+  mean(is.na(review$timeWorking))
+  review <- review[!is.na(review$timeWorking),]
   
   ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
   ggplot(review, aes(timeRevising)) + geom_histogram() + facet_wrap(~problemName)
@@ -346,9 +398,22 @@ analyzeRatings <- function(survey) {
 }
 
 analyzeAttempts <- function(survey, attempts, problem_id, last_problem_id) {
-  lastProblemSubmissions <- mergeSurveyAttempts(attempts, survey, last_problem_id)
+  
+  
   performance <- summarizeAttemtps(attempts, problem_id)
   performance$last_problem_id <- last_problem_id
+  
+  priorPerformance <- summarizeAttemtps(attempts, last_problem_id)
+  priorPerformance$last_problem_id <- priorPerformance$problem_id
+  priorPerformance$lastFirstCorrect <- priorPerformance$firstCorrect
+  priorPerformance$lastTimeRevising <- priorPerformance$timeRevising
+  priorPerformance$lastTimeStopped <- priorPerformance$timeStopped
+  performance <- merge(performance, priorPerformance[,c("user_id", "last_problem_id", "lastFirstCorrect", "lastTimeRevising", "lastTimeStopped")], all.x=T)
+  performance$timeFirstSubmit <- as.numeric(performance$timeStarted - performance$lastTimeStopped, units="mins")
+  performance$timeWorking <- performance$timeRevising + ifelse(performance$timeFirstSubmit < 15, performance$timeFirstSubmit, 3)
+  performance$timeWorking <- ifelse(performance$timeWorking <= 0, NA, performance$timeWorking)
+  
+  lastProblemSubmissions <- mergeSurveyAttempts(attempts, survey, last_problem_id)
   lastProblemSubmissions$last_problem_id <- lastProblemSubmissions$problem_id
   lastProblemSubmissions$problem_id <- NULL
   merged <- merge(lastProblemSubmissions, performance, 
@@ -370,9 +435,21 @@ summarizeAttemtps <- function(attempts, problem_id) {
       firstCorrect = first(userAttempts$is_correct),
       firstScore = first(userAttempts$score),
       everCorrect = any(userAttempts$is_correct),
-      timeRevising = max(userAttempts$timestamp) - min(userAttempts$timestamp)
+      timeRevising = workingTime(userAttempts$timestamp),
+      timeStopped = max(userAttempts$timestamp),
+      timeStarted = min(userAttempts$timestamp)
     ))
   }
   df <- df[-1,]
   return (df)
-} 
+}
+
+workingTime <- function(times, maxSep = 3) {
+  if (length(times) < 2) return(0)
+  total = 0
+  for (i in 2:length(times)) {
+    diff <- as.numeric(times[i] - times[i-1], units="mins")
+    total <- total + min(diff, maxSep)
+  }
+  return(total)
+}

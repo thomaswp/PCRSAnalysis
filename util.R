@@ -2,6 +2,8 @@ library(ggplot2)
 library(plyr)
 library(reshape2)
 
+twoColors <- c("#a1d99b","#2c7fb8")
+
 read.qualtrics <- function(file, startDate = NA) {
   data <- read.csv(file)
   # Remove the extra qualtrics columns

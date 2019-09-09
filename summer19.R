@@ -1,6 +1,7 @@
 source("util.R")
 
 library(data.table)
+library(car)
 
 # Run me line by line
 loadData <- function() {
@@ -145,15 +146,44 @@ drawPlots <- function() {
   hist(dataset$normTR)
   dataset$rankTR <- rank(dataset$normTR)
   
+  kruskal.test(dataset$normTR, dataset$cond)
+  kruskal.test(dataset$timeRevising, dataset$cond)
+  summary(lm(timeRevising ~ showCC * showBlanks + problem_id, data=dataset))
   summary(lm(normTR ~ showCC * showBlanks, data=dataset))
-  condCompare(dataset$normTR, dataset$showBlanks)
-  condCompare(dataset$normTR, dataset$showBlanks, filter=!dataset$showCC)
+  # Report this
+  Anova(lm(normTR ~ showCC * showBlanks, data=dataset),type = 3)
+  condCompare(dataset$normTR, dataset$showBlanks, test=t.test)
+  condCompare(dataset$normTR, dataset$showBlanks, filter=!dataset$showCC, test=t.test)
   condCompare(dataset$normTR, dataset$showBlanks, filter=dataset$showCC)
   
   ggplot(dataset, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
     ggtitle("Time Revising by Condition")
+  
+  summary(lm(rating ~ showCC * showBlanks, data=dataset))
+  
+  ggplot(dataset, aes(y=rating, x=cond)) + geom_boxplot() + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
+    ggtitle("Rating")
+  
+  summary(lm(survey ~ showCC * showBlanks + problem_id, data=dataset))
+  
+  statsComb <- ddply(dataset, c("showCC", "showBlanks"), summarize, n=length(showCC),
+                 percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),
+                 percEverCorrect=mean(everCorrect),seFE=se.prop(percEverCorrect, n),
+                 percSubmitted=mean(survey), seSV=se.prop(percSubmitted, n),
+                 medAttempts=median(nAttempts),
+                 corSurveyFirstCorrect=cor(firstCorrect,survey),
+                 fisherSurveyFirstCorrect=fisher.test(firstCorrect,survey)$p.value)
+
+  ggplot(statsComb, aes(x=showCC, fill=showBlanks==1, y=percSubmitted)) + geom_bar(stat="identity", position="dodge") + 
+    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
+    geom_errorbar(aes(ymin=percSubmitted-seSV, ymax=percSubmitted+seSV), width=0.25, position = position_dodge(width = 1)) +
+    scale_y_continuous(limits=c(0,1)) +
+    ggtitle("Percent Completed Survey")
+  
   
   ggplot(dataset, aes(y=firstScore, x=cond)) + geom_boxplot() + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 3, shape = 24, fill = "red") + 
@@ -180,6 +210,8 @@ drawPlots <- function() {
     geom_errorbar(aes(ymin=percSubmitted-seSV, ymax=percSubmitted+seSV), width=0.25, position = position_dodge(width = 1)) +
     facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1)) +
     ggtitle("Percent Completed Survey")
+  
+
   
   
   statsSurvey <- ddply(dataset[dataset$survey,], c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
@@ -222,6 +254,7 @@ analyzeAllReview <- function() {
   # 99% of students attempted the problem, so probably easier to remove them
   mean(review$attempted)
   review <- review[review$attempted,]
+  review$rating <- review$Q25
   
   ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
   ggplot(review, aes(timeRevising)) + geom_histogram() + facet_wrap(~problemName)

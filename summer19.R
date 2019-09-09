@@ -203,7 +203,9 @@ drawPlots <- function() {
   
   Anova(lm(firstScore ~ showCC * showBlanks, data=dataset),type = 3)
   Anova(lm(rating ~ showCC * showBlanks, data=dataset),type = 3)
-  chisq.test(survey ~ cond, dataset[dataset$cond != "no_cc/no_blanks",])
+  
+  tbl <- dataset[dataset$cond != "no_cc/no_blanks", c("survey", "cond")]
+  chisq.test(tbl$survey, tbl$cond)
   
   condCompare(dataset$firstScore*25, dataset$showBlanks, test=t.test)
   condCompare(dataset$firstScore*25, dataset$showBlanks, filter=!dataset$showCC, test=t.test)

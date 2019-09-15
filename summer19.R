@@ -45,6 +45,38 @@ loadData <- function() {
     problemName=c("2A_Find_outliers", "2B_Get_short_heights", "3A_Discount", "3B_Discount", "1A_Average_height", "1B_Average_even",
                   "1A_List_of_indexes", "2A_Bubble_bubble", "2B_Inserting_into_list")
   )
+  
+  p147Regex <- "[a-zA-Z_-]+\\s*=\\s*\\[\\]\\s*for\\s+[a-zA-Z_-]+\\s+in\\s+data:\\s+if\\s+[a-zA-Z_-]+\\s+[<>]\\s+[a-zA-Z_-]+:\\s+[a-zA-Z_-]+\\.append\\([a-zA-Z_-]+\\)\\s+return\\s+[a-zA-Z_-]+"
+  p149Regex <- "for\\s+[a-zA-Z_-]+\\s+in\\s+range\\(len\\(item_prices\\)\\):\\s+item_prices\\[[a-zA-Z_-]+\\]\\s*=\\s*max\\(+item_prices\\[[a-zA-Z_-]+\\]\\s*\\/\\s*divider\\)?\\s*-\\s*dollar_discount\\)*,\\s*[0-9.]+\\)"
+  p151Reges <- "[a-zA-Z_-]+\\s*=\\s*0\\s+[a-zA-Z_-]+\\s*=\\s*0\\s+for\\s+[a-zA-Z_-]+\\s+in\\s+heights:\\s+if\\s+[0a-zA-Z_-]+\\s*[><=]+\\s[0a-zA-Z_-]+:\\s+[a-zA-Z_-]+\\s*\\+=\\s+[a-zA-Z_-]+\\s+[1a-zA-Z_-]+\\s*\\+=\\s*[1a-zA-Z_-]+\\s+return\\s+[a-zA-Z_-]+\\s*\\/\\s*[a-zA-Z_-]+"
+  
+  p147Sol <-
+"def find_outliers(data: List[int], outlier_threshold: int) -> List[int]:
+    
+  outliers = []
+  
+  for value in data:
+    if value > outlier_threshold:
+      outliers.append(value)
+  
+  return outliers"
+  p149Sol <- 
+"def discount(item_prices: List[float], divider: float, dollar_discount: float) -> None:
+    for i in range(len(item_prices)):
+        item_prices[i] = max((item_prices[i] / divider) -
+        dollar_discount, 1)"
+  p151Sol <- 
+"def average_height(heights : List[int]) -> float:
+
+    total = 0
+    count = 0
+    for height in heights:
+        if height >= 0:
+            total += height
+            count += 1
+
+    return total / count"
+  solutions <- data.frame(last_problem_id=c(147, 149, 151), solution=c(p147Sol, p149Sol, p151Sol))
 }
 
 mergeSurveyAttempts <- function(attempts, survey, problem_id) {
@@ -124,6 +156,11 @@ drawPlots <- function() {
   dataset$showCC <- dataset$showCC == 1
   dataset$cond <- paste0(ifelse(dataset$showCC==0, "no_cc", "cc"), "/", ifelse(dataset$showBlanks==0, "no_blanks", "blanks"))
   dataset$cond <- ordered(dataset$cond, c("no_cc/no_blanks", "no_cc/blanks", "cc/no_blanks", "cc/blanks"))
+  dataset$surveyTimeCapped <- pmin(dataset$surveyTime, 300)/60
+  dataset$diff <- sapply(1:nrow(dataset), function(i) stringMatch(dataset$solution[i], dataset$lastCode[i], normalize="NO") / nchar(as.character(dataset$solution[i])))
+  dataset$match147 <- grepl(p147Regex, dataset$lastCode)
+  dataset$match149 <- grepl(p149Regex, dataset$lastCode)
+  dataset$match150 <- grepl("min", dataset$code) & !grepl("if", dataset$code)
   
   timeStats <- ddply(dataset, "problem_id", summarize, mTime = mean(timeWorking, na.rm=T), sdTime = sd(timeWorking, na.rm=T),
                                                        medLastTime = median(lastTimeRevising))
@@ -244,7 +281,6 @@ drawPlots <- function() {
       )
     })
   }
-  dataset$surveyTimeCapped <- pmin(dataset$surveyTime, 300)/60
   ggplot(dataset, aes(y=surveyTimeCapped, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
@@ -255,6 +291,7 @@ drawPlots <- function() {
     #facet_grid(problemName ~ .) +
     theme_bw() +
     ggtitle("Time on survey")
+  Anova(lm(surveyTimeCapped ~ showCC * showBlanks, data=dataset), type=3)
   
   
   stats <- ddply(dataset, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
@@ -313,8 +350,9 @@ analyzeAllReview <- function() {
     analyzeAttempts(surveyReview, attempts, 152, 151)
   )
   
-  # Merge with problem names
+  # Merge with problem names and solutions
   review <- merge(review, problemNames, all.x=T)
+  review <- merge(review, solutions)
   # Remove those with no known condition
   review <- review[!is.na(review$showCC) & !is.na(review$showBlanks),]
   # 99% of students attempted the problem, so probably easier to remove them
@@ -325,73 +363,6 @@ analyzeAllReview <- function() {
   review <- review[!is.na(review$timeWorking),]
   review$surveyTime <- ifNA(review$Q29_Page.Submit, ifNA(review$Q30_Page.Submit, review$Q61_Page.Submit))
   
-  ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
-  ggplot(review, aes(timeRevising)) + geom_histogram() + facet_wrap(~problemName)
-  ggplot(review, aes(firstScore)) + geom_histogram() + facet_wrap(~problemName)
-  
-  # Only run to remove all those who didn't submit survey (treatment not ITT effect)
-  #review <- review[review$survey,]
-  
-  ddply(review, c("showCC", "showBlanks"), summarize, percFirstCorrect=mean(firstCorrect), medAttempts=median(nAttempts))
-  anova(lm(firstCorrect ~ showCC * showBlanks + problemName, data=review))
-  summary(lm(firstCorrect ~ showCC * showBlanks + problemName, data=review))
-  fisher.test(xor(review$showCC, review$showBlanks), review$firstCorrect)
-  summary(glm(firstCorrect ~ showCC * showBlanks + problemName, data=review, family=binomial()))
-  
-  summary(glm(firstCorrect ~ problemName * sign(showBlanks+showCC), data=review, family=binomial()))
-  
-  fisher.test(review$showBlanks[!review$showCC], review$firstCorrect[!review$showCC])
-  
-  
-  ggplot(review, aes(y=0+firstCorrect, x=cond)) + stat_summary(
-    geom = "point",
-    fun.y = "mean",
-    col = "black",
-    size = 3,
-    shape = 24,
-    fill = "red"
-  ) + facet_wrap(~ problemName) + scale_y_continuous(limits=c(0,1))
-  
-  ggplot(review, aes(y=timeRevising, x=cond)) + geom_boxplot() + 
-  stat_summary(
-    geom = "point",
-    fun.y = "mean",
-    col = "black",
-    size = 3,
-    shape = 24,
-    fill = "red"
-  ) + 
-  stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
-  facet_wrap(~ problemName)
-  
-  ggplot(review, aes(y=firstScore, x=cond)) + geom_boxplot() + 
-    stat_summary(
-      geom = "point",
-      fun.y = "mean",
-      col = "black",
-      size = 3,
-      shape = 24,
-      fill = "red"
-    ) + stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4) +
-    facet_wrap(~ problemName)
-    
-  stats <- ddply(review, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
-                 percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),
-                 percEverCorrect=mean(everCorrect),seFE=se.prop(percEverCorrect, n),
-                 percSubmitted=mean(survey), seSV=se.prop(percSubmitted, n),
-                 medAttempts=median(nAttempts))
-  
-  ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percFirstCorrect)) + geom_bar(stat="identity", position="dodge") + 
-    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
-    geom_errorbar(aes(ymin=percFirstCorrect-seFC, ymax=percFirstCorrect+seFC), width=0.25, position = position_dodge(width = 1)) +
-    facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1))
-  
-  ggplot(stats, aes(x=showCC, fill=showBlanks==1, y=percSubmitted)) + geom_bar(stat="identity", position="dodge") + 
-    geom_text(aes(label=paste0("n=",n)), position = position_dodge(width = 1)) + 
-    geom_errorbar(aes(ymin=percSubmitted-seSV, ymax=percSubmitted+seSV), width=0.25, position = position_dodge(width = 1)) +
-    facet_grid(problemName ~ .) + scale_y_continuous(limits=c(0,1))
-  
-  anova(lm(Q25 ~ showCC * showBlanks + as.factor(problemName), data=review))
 }
 
 
@@ -425,7 +396,8 @@ analyzeAttempts <- function(survey, attempts, problem_id, last_problem_id) {
   priorPerformance$lastFirstCorrect <- priorPerformance$firstCorrect
   priorPerformance$lastTimeRevising <- priorPerformance$timeRevising
   priorPerformance$lastTimeStopped <- priorPerformance$timeStopped
-  performance <- merge(performance, priorPerformance[,c("user_id", "last_problem_id", "lastFirstCorrect", "lastTimeRevising", "lastTimeStopped")], all.x=T)
+  priorPerformance$lastCode <- priorPerformance$code
+  performance <- merge(performance, priorPerformance[,c("user_id", "last_problem_id", "lastFirstCorrect", "lastTimeRevising", "lastTimeStopped", "lastCode")], all.x=T)
   performance$timeFirstSubmit <- as.numeric(performance$timeStarted - performance$lastTimeStopped, units="mins")
   performance$timeWorking <- performance$timeRevising + ifelse(performance$timeFirstSubmit < 15, performance$timeFirstSubmit, 3)
   performance$timeWorking <- ifelse(performance$timeWorking <= 0, NA, performance$timeWorking)
@@ -454,7 +426,8 @@ summarizeAttemtps <- function(attempts, problem_id) {
       everCorrect = any(userAttempts$is_correct),
       timeRevising = workingTime(userAttempts$timestamp),
       timeStopped = max(userAttempts$timestamp),
-      timeStarted = min(userAttempts$timestamp)
+      timeStarted = min(userAttempts$timestamp),
+      code = last(userAttempts$submission)
     ))
   }
   df <- df[-1,]
@@ -470,3 +443,33 @@ workingTime <- function(times, maxSep = 3) {
   }
   return(total)
 }
+
+stringMatch <-
+  function(string.1, string.2, normalize=c('YES', 'NO'), penalty = 1, case.sensitive = FALSE) {
+    normalize <- toupper(normalize)
+    normalize <- match.arg(normalize)
+    if(case.sensitive == FALSE) {   
+      string.1 <- tolower(string.1)
+      string.2 <- tolower(string.2)
+    }
+    string.1 <- as.character(string.1)
+    string.2 <- as.character(string.2)
+    s1 <- strsplit(string.1,split="\\s+")[[1]]
+    s2 <- strsplit(string.2,split="\\s+")[[1]]
+    n <- length(s1)
+    m <- length(s2)
+    d <- matrix(0, nrow=n+1, ncol=m+1)
+    d[,1] <- 0:n
+    d[1,] <- 0:m
+    d[1,1] <- 0
+    for (i in 2:(n+1)) {
+      for (j in 2:(m+1)) {
+        if (s1[i-1] == s2[j-1]) cost <- 0 else cost <- penalty
+        d[i,j] <- min(d[i-1,j] + 1, # insertion
+                      d[i,j-1] + 1, # deletion
+                      d[i-1,j-1] + cost) # substitution
+      }
+    }
+    switch(normalize, YES = 1-d[n+1,m+1]/max(n,m), # normalize to [0,1]
+           NO = d[n+1,m+1]) # Return edit distance
+  }

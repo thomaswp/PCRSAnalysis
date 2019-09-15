@@ -221,14 +221,6 @@ drawPlots <- function() {
                                                        mRating=mean(rating, na.rm=T), sdRating=sd(rating, na.rm=T),
                                                        pComplete=mean(survey)*100)
   
-  stat_box_data <- function(y) {
-    return( 
-      data.frame(
-        y = 0,
-        label = paste('n =', length(y))
-      )
-    )
-  }
   ggplot(dataset, aes(y=firstScore/4, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
@@ -241,6 +233,28 @@ drawPlots <- function() {
     ggtitle("Test Passed on First Attempt")
   
   
+  
+  stat_box_data <- function(x) {
+    return (function(y) {
+      return( 
+        data.frame(
+          y = 1.15 * max(x, na.rm=T),
+          label = paste0('n=', length(y))
+        )
+      )
+    })
+  }
+  dataset$surveyTimeCapped <- pmin(dataset$surveyTime, 300)/60
+  ggplot(dataset, aes(y=surveyTimeCapped, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
+    stat_summary(fun.data = stat_box_data(dataset$surveyTimeCapped), geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)) +
+    scale_y_continuous(name = "Survey Time (m)") +
+    scale_x_discrete(name="Explicit Prompts") +
+    scale_fill_manual(name="Implicit\nPrompts", values=twoColors) +
+    #facet_grid(problemName ~ .) +
+    theme_bw() +
+    ggtitle("Time on survey")
   
   
   stats <- ddply(dataset, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
@@ -309,6 +323,7 @@ analyzeAllReview <- function() {
   review$rating <- review$Q25
   mean(is.na(review$timeWorking))
   review <- review[!is.na(review$timeWorking),]
+  review$surveyTime <- ifNA(review$Q29_Page.Submit, ifNA(review$Q30_Page.Submit, review$Q61_Page.Submit))
   
   ggplot(review, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
   ggplot(review, aes(timeRevising)) + geom_histogram() + facet_wrap(~problemName)

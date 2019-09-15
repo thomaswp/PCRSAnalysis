@@ -48,7 +48,7 @@ loadData <- function() {
   
   p147Regex <- "[a-zA-Z_-]+\\s*=\\s*\\[\\]\\s*for\\s+[a-zA-Z_-]+\\s+in\\s+data:\\s+if\\s+[a-zA-Z_-]+\\s+[<>]\\s+[a-zA-Z_-]+:\\s+[a-zA-Z_-]+\\.append\\([a-zA-Z_-]+\\)\\s+return\\s+[a-zA-Z_-]+"
   p149Regex <- "for\\s+[a-zA-Z_-]+\\s+in\\s+range\\(len\\(item_prices\\)\\):\\s+item_prices\\[[a-zA-Z_-]+\\]\\s*=\\s*max\\(+item_prices\\[[a-zA-Z_-]+\\]\\s*\\/\\s*divider\\)?\\s*-\\s*dollar_discount\\)*,\\s*[0-9.]+\\)"
-  p151Reges <- "[a-zA-Z_-]+\\s*=\\s*0\\s+[a-zA-Z_-]+\\s*=\\s*0\\s+for\\s+[a-zA-Z_-]+\\s+in\\s+heights:\\s+if\\s+[0a-zA-Z_-]+\\s*[><=]+\\s[0a-zA-Z_-]+:\\s+[a-zA-Z_-]+\\s*\\+=\\s+[a-zA-Z_-]+\\s+[1a-zA-Z_-]+\\s*\\+=\\s*[1a-zA-Z_-]+\\s+return\\s+[a-zA-Z_-]+\\s*\\/\\s*[a-zA-Z_-]+"
+  p151Regex <- "[a-zA-Z_-]+\\s*=\\s*0\\s+[a-zA-Z_-]+\\s*=\\s*0\\s+for\\s+[a-zA-Z_-]+\\s+in\\s+heights:\\s+if\\s+[0a-zA-Z_-]+\\s*[><=]+\\s[0a-zA-Z_-]+:\\s+[a-zA-Z_-]+\\s*\\+=\\s+[a-zA-Z_-]+\\s+[1a-zA-Z_-]+\\s*\\+=\\s*[1a-zA-Z_-]+\\s+return\\s+[a-zA-Z_-]+\\s*\\/\\s*[a-zA-Z_-]+"
   
   p147Sol <-
 "def find_outliers(data: List[int], outlier_threshold: int) -> List[int]:
@@ -76,7 +76,7 @@ loadData <- function() {
             count += 1
 
     return total / count"
-  solutions <- data.frame(last_problem_id=c(147, 149, 151), solution=c(p147Sol, p149Sol, p151Sol))
+  solutions <- data.frame(last_problem_id=c(147, 149, 151), solution=c(p147Sol, p149Sol, p151Sol), regex=c(p147Regex, p149Regex, p151Regex))
 }
 
 mergeSurveyAttempts <- function(attempts, survey, problem_id) {
@@ -158,7 +158,7 @@ drawPlots <- function() {
   dataset$cond <- ordered(dataset$cond, c("no_cc/no_blanks", "no_cc/blanks", "cc/no_blanks", "cc/blanks"))
   dataset$surveyTimeCapped <- pmin(dataset$surveyTime, 300)/60
   dataset$diff <- sapply(1:nrow(dataset), function(i) stringMatch(dataset$solution[i], dataset$lastCode[i], normalize="NO") / nchar(as.character(dataset$solution[i])))
-  dataset$match147 <- grepl(p147Regex, dataset$lastCode)
+  dataset$match <- sapply(1:nrow(dataset), function(i) grepl(dataset$regex[i], dataset$lastCode[i]))
   dataset$match149 <- grepl(p149Regex, dataset$lastCode)
   dataset$match150 <- grepl("min", dataset$code) & !grepl("if", dataset$code)
   
@@ -292,6 +292,7 @@ drawPlots <- function() {
     theme_bw() +
     ggtitle("Time on survey")
   Anova(lm(surveyTimeCapped ~ showCC * showBlanks, data=dataset), type=3)
+  ddply(dataset, "cond", summarize, mTime=mean(surveyTimeCapped, na.rm=T), sdTime=sd(surveyTimeCapped, na.rm=T))
   
   
   stats <- ddply(dataset, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),

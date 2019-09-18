@@ -2,6 +2,8 @@ source("util.R")
 
 library(data.table)
 library(car)
+library(lme4)
+library(lmerTest)
 
 options(contrasts = c("contr.sum","contr.poly"))
 
@@ -244,6 +246,14 @@ drawPlots <- function() {
   tbl <- dataset[dataset$cond != "no_cc/no_blanks", c("survey", "cond")]
   chisq.test(tbl$survey, tbl$cond)
   
+  filt <- dataset[dataset$problem_id != 150,]
+  
+  kruskal.test(filt$firstScore, filt$cond)
+  summary(aov(filt$firstScore ~ filt$cond))
+  Anova(lm(firstScore ~ showCC * showBlanks, data=filt),type = 3)
+  summary(lmer(firstScore ~ showCC * showBlanks + (1|user_id), data=filt),type = 3)
+  summary(lmer(firstScore ~ cond + (1|user_id), data=filt),type = 3)
+  
   condCompare(dataset$firstScore*25, dataset$showBlanks, test=t.test)
   condCompare(dataset$firstScore*25, dataset$showBlanks, filter=!dataset$showCC, test=t.test)
   condCompare(dataset$firstScore*25, dataset$showBlanks, filter=!dataset$showCC)
@@ -258,7 +268,7 @@ drawPlots <- function() {
                                                        mRating=mean(rating, na.rm=T), sdRating=sd(rating, na.rm=T),
                                                        pComplete=mean(survey)*100)
   
-  ggplot(dataset, aes(y=firstScore/4, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
+  ggplot(filt, aes(y=firstScore/4, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
     # stat_summary(fun.data = stat_box_data, geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)),
@@ -363,6 +373,10 @@ analyzeAllReview <- function() {
   mean(is.na(review$timeWorking))
   review <- review[!is.na(review$timeWorking),]
   review$surveyTime <- ifNA(review$Q29_Page.Submit, ifNA(review$Q30_Page.Submit, review$Q61_Page.Submit))
+  review$Q56[!is.na(review$Q56) & review$Q56 == ""] <- NA
+  review$Q38[!is.na(review$Q38) & review$Q38 == ""] <- NA
+  review$Q23[!is.na(review$Q23) & review$Q23 == ""] <- NA
+  review$comparison <- ifNA(as.character(review$Q56), ifNA(as.character(review$Q38), as.character(review$Q23)))
   
 }
 

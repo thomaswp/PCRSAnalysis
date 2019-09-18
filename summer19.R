@@ -263,6 +263,7 @@ drawPlots <- function() {
   condCompare(dataset$firstScore*25, dataset$showBlanks, filter=dataset$showCC)
   condCompare(dataset$firstScore*25, dataset$showCC, filter=dataset$showBlanks)
   compareStats(dataset$firstScore[dataset$cond == "no_cc/no_blanks"]*25, dataset$firstScore[dataset$cond == "cc/blanks"]*25, test=t.test)
+  compareStats(dataset$firstScore[dataset$cond == "no_cc/blanks"]*25, dataset$firstScore[dataset$cond == "cc/no_blanks"]*25, test=t.test)
   
   ddply(dataset, c("showCC", "showBlanks"), summarize, mTests=mean(firstScore*25), sdTests=sd(firstScore*25),
                                                        mRating=mean(rating, na.rm=T), sdRating=sd(rating, na.rm=T),
@@ -273,8 +274,8 @@ drawPlots <- function() {
     stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
     # stat_summary(fun.data = stat_box_data, geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)),
     scale_y_continuous(labels=scales::percent, name = "Tests Passed") +
-    scale_x_discrete(name="Explicit Prompts") +
-    scale_fill_manual(name="Implicit\nPrompts", values=twoColors) +
+    scale_x_discrete(name="Compare Prompts") +
+    scale_fill_manual(name="Explain\nPrompts", values=twoColors) +
     #facet_grid(problemName ~ .) +
     theme_bw() +
     ggtitle("Test Passed on First Attempt")
@@ -292,15 +293,15 @@ drawPlots <- function() {
     })
   }
   ggplot(dataset, aes(y=surveyTimeCapped, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
-    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
-    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.75)) + 
     stat_summary(fun.data = stat_box_data(dataset$surveyTimeCapped), geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)) +
-    scale_y_continuous(name = "Survey Time (m)") +
-    scale_x_discrete(name="Explicit Prompts") +
-    scale_fill_manual(name="Implicit\nPrompts", values=twoColors) +
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.75), color="#000000") +
+    scale_y_continuous(name = "Time (m)", breaks = c(1, 2, 3, 4, 5)) +
+    scale_x_discrete(name="Compare Prompts") +
+    scale_fill_manual(name="Explain\nPrompts", values=twoColors) +
     #facet_grid(problemName ~ .) +
     theme_bw() +
-    ggtitle("Time on survey")
+    ggtitle("Time on Intervention")
   Anova(lm(surveyTimeCapped ~ showCC * showBlanks, data=dataset), type=3)
   ddply(dataset, "cond", summarize, mTime=mean(surveyTimeCapped, na.rm=T), sdTime=sd(surveyTimeCapped, na.rm=T))
   

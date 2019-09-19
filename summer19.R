@@ -174,6 +174,12 @@ drawPlots <- function() {
   
   Anova(lm(rating ~ showCC * showBlanks, data=dataset), type=3)
   Anova(lmer(rating ~ showCC * showBlanks + (1|user_id), data=dataset), type=3)
+  compareStats(dataset$rating[dataset$cond=="no_cc/no_blanks"], dataset$rating[dataset$cond=="no_cc/blanks"], test=t.test)
+  compareStats(dataset$rating[dataset$cond=="no_cc/no_blanks"], dataset$rating[dataset$cond=="cc/no_blanks"], test=t.test)
+  compareStats(dataset$rating[dataset$cond=="no_cc/no_blanks"], dataset$rating[dataset$cond=="cc/blanks"], test=t.test)
+  compareStats(dataset$rating[dataset$cond=="cc/no_blanks"], dataset$rating[dataset$cond=="no_cc/blanks"], test=t.test)
+  compareStats(dataset$rating[dataset$cond=="cc/no_blanks"], dataset$rating[dataset$cond=="cc/blanks"], test=t.test)
+  compareStats(dataset$rating[dataset$cond=="no_cc/blanks"], dataset$rating[dataset$cond=="cc/blanks"], test=t.test)
   
   ggplot(dataset, aes(y=rating, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 

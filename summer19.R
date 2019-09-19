@@ -171,6 +171,81 @@ drawPlots <- function() {
   hist(dataset$normTW)
   dataset$lastTop50 <- dataset$lastTimeRevising <= dataset$medLastTime
   
+  
+  Anova(lm(rating ~ showCC * showBlanks, data=dataset), type=3)
+  Anova(lmer(rating ~ showCC * showBlanks + (1|user_id), data=dataset), type=3)
+  
+  ggplot(dataset, aes(y=rating, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
+    # stat_summary(fun.data = stat_box_data, geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)),
+    scale_y_continuous(labels=scales::percent, name = "Tests Passed") +
+    scale_x_discrete(name="Explicit Prompts") +
+    scale_fill_manual(name="Implicit\nPrompts", values=twoColors) +
+    #facet_grid(problemName ~ .) +
+    theme_bw() +
+    ggtitle("Rating")
+  
+  Anova(lm(firstScore ~ showCC * showBlanks, data=dataset), type=3)
+  Anova(lmer(firstScore ~ showCC * showBlanks + (1|user_id), data=dataset), type=3)
+  
+  condCompare(dataset$firstScore*25, dataset$showBlanks, test=t.test)
+  condCompare(dataset$firstScore*25, dataset$showBlanks, filter=!dataset$showCC, test=t.test)
+  condCompare(dataset$firstScore*25, dataset$showBlanks, filter=!dataset$showCC)
+  condCompare(dataset$firstScore*25, dataset$showCC, filter=!dataset$showBlanks, test=t.test)
+  condCompare(dataset$firstScore*25, dataset$showCC, filter=!dataset$showBlanks)
+  condCompare(dataset$firstScore*25, dataset$showBlanks, filter=dataset$showCC, test=t.test)
+  condCompare(dataset$firstScore*25, dataset$showBlanks, filter=dataset$showCC)
+  condCompare(dataset$firstScore*25, dataset$showCC, filter=dataset$showBlanks)
+  compareStats(dataset$firstScore[dataset$cond == "no_cc/no_blanks"]*25, dataset$firstScore[dataset$cond == "cc/blanks"]*25, test=t.test)
+  
+  Anova(lmer(surveyTimeCapped ~ showCC * showBlanks + (1|user_id), data=dataset), type=3)
+  
+  Anova(lm(surveyTimeCapped ~ showCC * showBlanks, data=dataset), type=3)
+  ddply(dataset, "cond", summarize, mTime=mean(surveyTimeCapped, na.rm=T), sdTime=sd(surveyTimeCapped, na.rm=T))
+  
+  chisq.test(dataset$cond, dataset$survey)
+  chisq.test(dataset$showCC, dataset$survey)
+  chisq.test(dataset$showBlanks, dataset$survey)
+  
+  
+  ggplot(filt, aes(y=firstScore/4, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
+    # stat_summary(fun.data = stat_box_data, geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)),
+    scale_y_continuous(labels=scales::percent, name = "Tests Passed") +
+    scale_x_discrete(name="Compare Prompts") +
+    scale_fill_manual(name="Explain\nPrompts", values=twoColors) +
+    #facet_grid(problemName ~ .) +
+    theme_bw() +
+    ggtitle("Test Passed on First Attempt")
+  
+  
+  
+  stat_box_data <- function(x) {
+    return (function(y) {
+      return( 
+        data.frame(
+          y = 1.15 * max(x, na.rm=T),
+          label = paste0('n=', length(y))
+        )
+      )
+    })
+  }
+  ggplot(dataset, aes(y=surveyTimeCapped, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
+    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.75)) + 
+    stat_summary(fun.data = stat_box_data(dataset$surveyTimeCapped), geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)) +
+    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.75), color="#000000") +
+    scale_y_continuous(name = "Time (m)", breaks = c(1, 2, 3, 4, 5)) +
+    scale_x_discrete(name="Compare Prompts") +
+    scale_fill_manual(name="Explain\nPrompts", values=twoColors) +
+    #facet_grid(problemName ~ .) +
+    theme_bw() +
+    ggtitle("Time on Intervention")
+  Anova(lm(surveyTimeCapped ~ showCC * showBlanks, data=dataset), type=3)
+  ddply(dataset, "cond", summarize, mTime=mean(surveyTimeCapped, na.rm=T), sdTime=sd(surveyTimeCapped, na.rm=T))
+  
+  
   ggplot(dataset, aes(nAttempts)) + geom_histogram() + facet_wrap(~problemName)
   ddply(dataset, "problemName", summarize, medAttempts=median(nAttempts), meanAttempts=mean(nAttempts), medTR = median(timeRevising))
   
@@ -216,11 +291,8 @@ drawPlots <- function() {
   
   
   chisq.test(dataset$cond, dataset$survey)
-  chisq.test(dataset[,c("survey", "showCC", "showBlanks")])
-  chisq.test(dataset$showCC, dataset$survey)
   mean(dataset$survey[dataset$showCC])
   mean(dataset$survey[!dataset$showCC])
-  chisq.test(dataset$showBlanks, dataset$survey)
   mean(dataset$survey[dataset$showBlanks])
   mean(dataset$survey[!dataset$showBlanks])
   
@@ -269,42 +341,7 @@ drawPlots <- function() {
                                                        mRating=mean(rating, na.rm=T), sdRating=sd(rating, na.rm=T),
                                                        pComplete=mean(survey)*100)
   
-  ggplot(filt, aes(y=firstScore/4, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
-    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 
-    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.8)) +
-    # stat_summary(fun.data = stat_box_data, geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)),
-    scale_y_continuous(labels=scales::percent, name = "Tests Passed") +
-    scale_x_discrete(name="Compare Prompts") +
-    scale_fill_manual(name="Explain\nPrompts", values=twoColors) +
-    #facet_grid(problemName ~ .) +
-    theme_bw() +
-    ggtitle("Test Passed on First Attempt")
-  
-  
-  
-  stat_box_data <- function(x) {
-    return (function(y) {
-      return( 
-        data.frame(
-          y = 1.15 * max(x, na.rm=T),
-          label = paste0('n=', length(y))
-        )
-      )
-    })
-  }
-  ggplot(dataset, aes(y=surveyTimeCapped, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
-    stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.75)) + 
-    stat_summary(fun.data = stat_box_data(dataset$surveyTimeCapped), geom = "text", hjust = 0.5, vjust = 0.9, position = position_dodge(width = 0.8)) +
-    stat_summary(fun.data = mean_se, geom = "errorbar", width=0.4, position = position_dodge(width = 0.75), color="#000000") +
-    scale_y_continuous(name = "Time (m)", breaks = c(1, 2, 3, 4, 5)) +
-    scale_x_discrete(name="Compare Prompts") +
-    scale_fill_manual(name="Explain\nPrompts", values=twoColors) +
-    #facet_grid(problemName ~ .) +
-    theme_bw() +
-    ggtitle("Time on Intervention")
-  Anova(lm(surveyTimeCapped ~ showCC * showBlanks, data=dataset), type=3)
-  ddply(dataset, "cond", summarize, mTime=mean(surveyTimeCapped, na.rm=T), sdTime=sd(surveyTimeCapped, na.rm=T))
-  
+
   
   stats <- ddply(dataset, c("showCC", "showBlanks", "problemName"), summarize, n=length(showCC),
                  percFirstCorrect=mean(firstCorrect), seFC=se.prop(percFirstCorrect, n),

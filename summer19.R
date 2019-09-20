@@ -210,10 +210,16 @@ drawPlots <- function() {
   Anova(lm(surveyTimeCapped ~ showCC * showBlanks, data=dataset), type=3)
   ddply(dataset, "cond", summarize, mTime=mean(surveyTimeCapped, na.rm=T), sdTime=sd(surveyTimeCapped, na.rm=T))
   
-  chisq.test(dataset$cond, dataset$survey)
-  chisq.test(dataset$showCC, dataset$survey)
-  chisq.test(dataset$showBlanks, dataset$survey)
   
+  #chisq.test(dataset$cond, dataset$survey)
+  #chisq.test(dataset$showCC, dataset$survey)
+  #chisq.test(dataset$showBlanks, dataset$survey)
+  
+  hadPrompt <- dataset[dataset$cond != "no_cc/no_blanks",]
+  chisq.test(hadPrompt$lastFirstCorrect, hadPrompt$survey)
+  chisq.test(hadPrompt$cond, hadPrompt$survey)
+  mean(hadPrompt$survey[hadPrompt$lastFirstCorrect], na.rm=T)
+  mean(hadPrompt$survey[!hadPrompt$lastFirstCorrect], na.rm=T)
   
   ggplot(filt, aes(y=firstScore/4, x=showCC, fill=showBlanks==1)) + geom_boxplot(position="dodge") + 
     stat_summary(geom = "point", fun.y = "mean", col = "black", size = 1, shape = 1, position = position_dodge(width = 0.8)) + 

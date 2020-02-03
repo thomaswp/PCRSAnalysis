@@ -9,10 +9,10 @@ options(contrasts = c("contr.sum","contr.poly"))
 
 # Run me line by line
 loadData <- function() {
-  surveyReview <- read.qualtrics("data/review.csv")
-  surveyWk10 <- read.qualtrics("data/week10.csv")
-  attempts <- read.csv("data/python_problems_anon_aug7.csv", header=T)
-  consent <- read.csv("data/consent_info.csv", header=T)
+  surveyReview <- read.qualtrics("data/Su19/review.csv")
+  surveyWk10 <- read.qualtrics("data/Su19/week10.csv")
+  attempts <- read.csv("data/Su19/python_problems_anon_aug7.csv", header=T)
+  consent <- read.csv("data/Su19/consent_info.csv", header=T)
   consented <- consent$user_id[consent$consentrecode==1]
   
   # Remove test users

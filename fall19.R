@@ -24,7 +24,7 @@ attempts$correct <- attempts$score == attempts$max_score
 # for the other problems
 
 attempts$suggest <- ifelse(attempts$had_hints, grepl("'suggest': True", attempts$feedback_text, fixed=T), NA)
-attempts$hLevelInt <- ifelse(attempts$had_hints, grepl("'highlightLevelInt': 2", attempts$feedback_text, fixed=T) | grepl("'highlightLevelInt': 1", attempts$feedback_text, fixed=T), NA)
+attempts$hLevelInt <- ifelse(attempts$had_hints, grepl("'highlightLevelInt': 2", attempts$feedback_text, fixed=T), NA)
 attempts$showMissing <- ifelse(attempts$had_hints, grepl("'showMissing': True", attempts$feedback_text, fixed=T), NA)
 
 # number of incorrect attempts
@@ -221,14 +221,6 @@ lm_byStudent$problemsSinceLastHint = ifelse(lm_byStudent$early==FALSE & (lm_bySt
 lm_byStudent$problemsSinceLastHint = ifelse(lm_byStudent$early==FALSE & lm_byStudent$problem_id==179, 2, lm_byStudent$problemsSinceLastHint)
 
 lm_byStudent$earlyCond = ifelse(lm_byStudent$early==TRUE, 1, 0)
-anovaModel = aov(nAttempts ~ early * problem_id * problemsSinceLastHint * priorProblemsHints, data=lm_byStudent)
-summary(anovaModel)
-
-model1 = lmer(formula = nAttempts ~ early * problem_id * isHints * priorProblemsHints + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model1)
-
-model1 = lmer(formula = nAttempts ~ early * isHints * problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model1)
 
 ######################
 ## rating the problems difficulty instead of using 8 problems in the model
@@ -240,14 +232,11 @@ lm_byStudent$problem_id_ranked = ifelse((lm_byStudent$problem_id=="173" | lm_byS
 lm_byStudent$problem_id_ranked = ifelse((lm_byStudent$problem_id=="176" | lm_byStudent$problem_id=="178"), "3", lm_byStudent$problem_id_ranked)
 lm_byStudent$problem_id_ranked = ifelse((lm_byStudent$problem_id=="177" | lm_byStudent$problem_id=="179"), "4", lm_byStudent$problem_id_ranked)
 
-model13 = lmer(formula = pFirstCorrect ~ earlyCond * problem_id_ranked * isHints * problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE)
+model13 = lmer(formula = pFirstCorrect ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(model13)
 
-model14 = lmer(formula = nAttempts ~ earlyCond * problem_id_ranked * isHints * problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE)
+model14 = lmer(formula = nAttempts ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(model14)
-
-model15 = lmer(formula = nInCorrect ~ problem_id_ranked + isHints + priorProblemsHints + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model15)
 
 model15 = lmer(formula = nInCorrect ~ problem_id_ranked + isHints + priorProblemsHints + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(model15)
@@ -258,100 +247,60 @@ summary(model15)
 ##########################
 ##### analyzing hints factors
 ###########################
-## why highlightLevelInt is always true? is this correct?
-attempts2Factors = attempts
-
-# note that if a student is assigned to a condition, they will remain in this condition.
-byStudentFactors <- ddply(attempts2Factors, c("problem_id", "user_id"), summarize, 
-                   pCorrect = mean(correct),
-                   had_hints = any(had_hints[had_feedback]),
-                   had_feedback = any(had_feedback),
-                   nAttempts = length(correct),
-                   pFirstCorrect=mean(nAttempts == 1),
-                   nInCorrect = sum(correct==FALSE))
-
-
-byStudentFactors <- merge(students, byStudentFactors)
-byStudentFactors <- byStudentFactors[!is.na(byStudentFactors$early),]
-#just to verify that number of students in the early and late conditions is the same.
-test4 = ddply(byStudentFactors, c("user_id"), summarize, n = length(user_id), isEarly = any(early))
-table(test4$isEarly)
-
 #prepare data for the model
-byStudentFactors$suggest2 = ifelse(byStudentFactors$suggest==TRUE, 1, 0)
-byStudentFactors$hLevelInt2= ifelse(byStudentFactors$hLevelInt==TRUE, 1, 0)
-byStudentFactors$showMissing2 = ifelse(byStudentFactors$showMissing==TRUE, 1, 0)
-# Remove students who got the first problem correct on the first try
-# 957 
-byStudentFactors2 = byStudentFactors[!byStudentFactors$user_id %in% students_correct_firstTry$user_id, ]
-byStudentFactors2 = byStudentFactors2[order(byStudentFactors2$user_id), ]
-#just to verify
-length(byStudentFactors2$user_id[byStudentFactors2$pCorrect==1 & byStudentFactors2$problem_id==172])
+lm_byStudent$suggest2 = ifelse(lm_byStudent$suggest==TRUE, 1, 0)
+lm_byStudent$hLevelInt2= ifelse(lm_byStudent$hLevelInt==TRUE, 1, 0)
+lm_byStudent$showMissing2 = ifelse(lm_byStudent$showMissing==TRUE, 1, 0)
 
-byStudentFactors2$problem_id = as.character(byStudentFactors2$problem_id)
-byStudentFactors2$problem_id_ranked = "0"
-byStudentFactors2$problem_id_ranked = ifelse((byStudentFactors2$problem_id=="172" | byStudentFactors2$problem_id=="174"), "1", byStudentFactors2$problem_id_ranked)
-byStudentFactors2$problem_id_ranked = ifelse((byStudentFactors2$problem_id=="173" | byStudentFactors2$problem_id=="175"), "2", byStudentFactors2$problem_id_ranked)
-
-byStudentFactors2$problem_id_ranked = ifelse((byStudentFactors2$problem_id=="176" | byStudentFactors2$problem_id=="178"), "3", byStudentFactors2$problem_id_ranked)
-byStudentFactors2$problem_id_ranked = ifelse((byStudentFactors2$problem_id=="177" | byStudentFactors2$problem_id=="179"), "4", byStudentFactors2$problem_id_ranked)
-
-## prepare the model
-# problems ranks only has an effect
-modelFAll = lmer(formula = nAttempts ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = byStudentFactors2, REML=FALSE)
+modelFAll = lmer(formula = nAttempts ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelFAll)
 
-modelFAll2 = lmer(formula = nInCorrect ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = byStudentFactors2, REML=FALSE)
+modelFAll = lmer(formula = nAttempts ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
+summary(modelFAll)
+
+modelFAll2 = lmer(formula = nInCorrect ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelFAll2)
 
-modelFAll3 = lmer(formula = pFirstCorrect ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = byStudentFactors2, REML=FALSE)
+modelFAll3 = lmer(formula = pFirstCorrect ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelFAll3)
 
-modelF2 = lmer(formula = nInCorrect ~ suggest2 + (1 | user_id), data = byStudentFactors2, REML=FALSE)
+modelF2 = lmer(formula = nInCorrect ~ suggest2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelF2)
 
-modelF3 = lmer(formula = pFirstCorrect ~ hLevelInt2 + (1 | user_id), data = byStudentFactors2, REML=FALSE)
+modelF3 = lmer(formula = pFirstCorrect ~ hLevelInt2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelF3)
 
-modelF4 = lmer(formula = pFirstCorrect ~ showMissing2 + (1 | user_id), data = byStudentFactors2, REML=FALSE)
+modelF4 = lmer(formula = pFirstCorrect ~ showMissing2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelF4)
 
-modelF5 = lmer(formula = nInCorrect ~ suggest2 + problem_id_ranked + (1 | user_id), data = byStudentFactors2, REML=FALSE)
+modelF5 = lmer(formula = nInCorrect ~ suggest2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelF5)
 
-modelF6 = lmer(formula = nInCorrect ~ problem_id_ranked + (1 | user_id), data = byStudentFactors2, REML=FALSE)
+modelF6 = lmer(formula = nInCorrect ~ problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelF6)
 
 # non of these are significant
-condCompare(byStudentFactors2$nAttempts, byStudentFactors2$suggest)
-condCompare(byStudentFactors2$nAttempts, byStudentFactors2$showMissing)
-condCompare(byStudentFactors2$nAttempts, byStudentFactors2$hLevelInt)
+condCompare(lm_byStudent$nAttempts, lm_byStudent$suggest)
+condCompare(lm_byStudent$nAttempts, lm_byStudent$showMissing)
+condCompare(lm_byStudent$nAttempts, lm_byStudent$hLevelInt)
 
-condCompare(byStudentFactors2$pFirstCorrect, byStudentFactors2$suggest)
-condCompare(byStudentFactors2$pFirstCorrect, byStudentFactors2$showMissing)
-condCompare(byStudentFactors2$pFirstCorrect, byStudentFactors2$hLevelInt)
+condCompare(lm_byStudent$pFirstCorrect, lm_byStudent$suggest)
+condCompare(lm_byStudent$pFirstCorrect, lm_byStudent$showMissing)
+condCompare(lm_byStudent$pFirstCorrect, lm_byStudent$hLevelInt)
 
-condCompare(byStudentFactors2$nInCorrect, byStudentFactors2$suggest)
-condCompare(byStudentFactors2$nInCorrect, byStudentFactors2$showMissing)
-condCompare(byStudentFactors2$nInCorrect, byStudentFactors2$hLevelInt)
+condCompare(lm_byStudent$nInCorrect, lm_byStudent$suggest)
+condCompare(lm_byStudent$nInCorrect, lm_byStudent$showMissing)
+condCompare(lm_byStudent$nInCorrect, lm_byStudent$hLevelInt)
 
-ddply(byStudentFactors2, c("problem_id", "suggest"), summarize, pFirstCorrect=mean(nAttempts == 1), n=length(nAttempts))
+ddply(lm_byStudent, c("problem_id", "suggest"), summarize, pFirstCorrect=mean(nAttempts == 1), n=length(nAttempts))
 
 #### create a model for each problem
-byStudentFactors2_172 = byStudentFactors2[byStudentFactors2$problem_id=="172", ]
-# early: 64, late: 68
-length(unique(byStudentFactors2_172$user_id[byStudentFactors2_172$early==FALSE]))
-condCompare(byStudentFactors2_172$nAttempts, byStudentFactors2_172$suggest)
-condCompare(byStudentFactors2_172$nAttempts, byStudentFactors2_172$showMissing)
-condCompare(byStudentFactors2_172$nAttempts, byStudentFactors2_172$hLevelInt)
-
-byStudentFactors2_179 = byStudentFactors2[byStudentFactors2$problem_id=="179", ]
+lm_byStudent_179 = lm_byStudent[lm_byStudent$problem_id=="179", ]
 # early: 52, late: 52 . x: suggest = TRUE
-length(unique(byStudentFactors2_179$user_id[byStudentFactors2_179$suggest==TRUE]))
-condCompare(byStudentFactors2_179$nAttempts, byStudentFactors2_179$suggest) #significant
-condCompare(byStudentFactors2_179$nAttempts, byStudentFactors2_179$showMissing)
-condCompare(byStudentFactors2_179$nAttempts, byStudentFactors2_179$hLevelInt)
-
-condCompare(byStudentFactors2_179$pFirstCorrect, byStudentFactors2_179$suggest) #significant
-condCompare(byStudentFactors2_179$nInCorrect, byStudentFactors2_179$suggest) #significant
+length(unique(lm_byStudent_179$user_id[lm_byStudent_179$suggest==TRUE]))
+condCompare(lm_byStudent_179$nAttempts, lm_byStudent_179$suggest) #significant
+condCompare(lm_byStudent_179$nAttempts, lm_byStudent_179$showMissing)
+condCompare(lm_byStudent_179$nAttempts, lm_byStudent_179$hLevelInt)
+condCompare(lm_byStudent_179$pFirstCorrect, lm_byStudent_179$suggest) #significant
+condCompare(lm_byStudent_179$nInCorrect, lm_byStudent_179$suggest) #significant
 

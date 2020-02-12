@@ -8,11 +8,26 @@ library(ggpubr)
 
 
 allAttempts <- read.csv("data/pyandexpt.csv")
+allAttempts <- allAttempts[allAttempts$user_id %in% consenters$student_id,]
 consenters <- read.csv("data/consenters.csv")
 survey <- read.csv("data/survey.csv") # survey data can be linked to attempts data by : anonId and hashed_id
 
 attempts <- allAttempts[allAttempts$quest_id == 49,]
 attempts <- attempts[attempts$user_id %in% consenters$student_id,]
+
+priorAttempts <- ddply(allAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id))
+priorAttempts <- priorAttempts[priorAttempts$problem_id < 172,]
+meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
+priorAttempts <- merge(priorAttempts, meanAttempts)
+priorAttempts$zAttempts <- (priorAttempts$nAttempts - priorAttempts$mAttempts) / priorAttempts$sdAttempt
+priorKnowledge <- ddply(priorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts))
+mean(priorKnowledge$mz)
+mean(priorKnowledge$sdz)
+priorKnowledge$highPK <- priorKnowledge$mz < median(priorKnowledge$mz)
+table(priorKnowledge$highPK)
+priorKnowledge <- priorKnowledge[priorKnowledge$user_id %in% attempts$user_id,]
+attempts <- merge(attempts, priorKnowledge)
+
 
 #if feedback = null this means they were not assigned to a condition
 attempts$had_feedback <- attempts$feedback_text != ""
@@ -38,6 +53,8 @@ problem6_attempts <- estimateParameters(attempts, 177)
 problem7_attempts <- estimateParameters(attempts, 178)
 problem8_attempts <- estimateParameters(attempts, 179)
 attemptsTime = rbind(problem1_attempts, problem2_attempts, problem3_attempts, problem4_attempts, problem5_attempts, problem6_attempts, problem7_attempts, problem8_attempts)
+attemptsTime <- merge(attemptsTime, priorKnowledge)
+
 
 # add hints factors to students dataframe since the hint factor should be for the student, not for specific problem. We already know what are the problems with hints.
 students <- ddply(attempts, "user_id", summarize,
@@ -57,6 +74,8 @@ table(students$early)
 
 byStudentWTime <- merge(students, attemptsTime)
 byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),]
+byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
+byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
 ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + facet_wrap(~ problem_id)
 
 ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
@@ -87,6 +106,33 @@ ggplot(timeStats, aes(x=isAssessment+0, y=mLnTime, color=early)) +
 ggplot(timeStats, aes(x=isAssessment+0, y=pFirstCorrect, color=early)) + 
    geom_line() + 
    facet_wrap(~ problemGroup, scales = "free")
+
+condCompare(log(byStudentWTime$timeRevising+1), byStudentWTime$early, filter=byStudentWTime$problem_id==176, test=t.test)
+condCompare(byStudentWTime$timeRevising==0, byStudentWTime$early, filter=byStudentWTime$problem_id==176, test=fisher.test)
+
+pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize, 
+                   mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
+                   mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
+                   mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
+                   pFirstCorrect=mean(timeRevising==0))
+pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
+pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
+pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
+
+ggplot(pkStats, aes(x=early, y=mLnTime, linetype=highPK, group=highPK)) + 
+   geom_line(position=position_dodge(width=0.2)) + 
+   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime)) +
+   facet_wrap(~ problem_id, scales = "free")
+ggplot(pkStats, aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) + 
+   geom_line(position=position_dodge(width=0.2)) + 
+   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seLnTime, ymax=mAttempts+seLnTime)) +
+   facet_wrap(~ problem_id, scales = "free")
+ggplot(pkStats, aes(x=problem_id, y=mLnTime, color=early, linetype=highPK)) + 
+   geom_line(position=position_dodge(width=0.2), size=1) + 
+   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
+
+summary(lmer(timeRevising ~ exp * highPK + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
+summary(lmer(nAttempts ~ exp * highPK + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 
 
 # pFirst correct means 1/number of attempts , so the smaller the higher the attempts they did

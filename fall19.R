@@ -59,6 +59,36 @@ byStudentWTime <- merge(students, attemptsTime)
 byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),]
 ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + facet_wrap(~ problem_id)
 
+ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
+ggplot(byStudentWTime, aes(log(timeRevising+1))) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
+
+timeStats <- ddply(byStudentWTime, c("problem_id", "early"), summarize, 
+                   mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
+                   mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
+                   pFirstCorrect=mean(timeRevising==0))
+timeStats
+
+ggplot(timeStats, aes(x=problem_id, y=mTime, color=early)) + 
+   geom_line(position=position_dodge(width=0.2)) + 
+   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mTime-seTime, ymax=mTime+seTime))
+ggplot(timeStats, aes(x=problem_id, y=mLnTime, color=early)) + 
+   geom_line(position=position_dodge(width=0.2)) + 
+   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
+ggplot(timeStats, aes(x=problem_id, y=pFirstCorrect, color=early)) + 
+   geom_line()
+
+timeStats$isAssessment <- c(F, F, T, T, F, F, T, T)[timeStats$problem_id - 172 + 1]
+timeStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[timeStats$problem_id - 172 + 1]
+
+ggplot(timeStats, aes(x=isAssessment+0, y=mLnTime, color=early)) + 
+   geom_line(position=position_dodge(width=0.2)) + 
+   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime)) +
+   facet_wrap(~ problemGroup, scales = "free")
+ggplot(timeStats, aes(x=isAssessment+0, y=pFirstCorrect, color=early)) + 
+   geom_line() + 
+   facet_wrap(~ problemGroup, scales = "free")
+
+
 # pFirst correct means 1/number of attempts , so the smaller the higher the attempts they did
 ddply(byStudentWTime, c("problem_id", "early"), summarize, pFirstCorrect=mean(nAttempts == 1), n=length(nAttempts), meanTime = mean(timeRevising))
 

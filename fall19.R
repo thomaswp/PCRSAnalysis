@@ -28,6 +28,14 @@ table(priorKnowledge$highPK)
 priorKnowledge <- priorKnowledge[priorKnowledge$user_id %in% attempts$user_id,]
 attempts <- merge(attempts, priorKnowledge)
 
+## just to verify
+#################
+priorAttempts <- priorAttempts[priorAttempts$user_id %in% attempts$user_id,]
+length(unique(priorAttempts$problem_id)) # There is 71 problems
+priorAttempts2 <- ddply(priorAttempts, "user_id", summarize, nProblems = length(problem_id))
+summary(priorAttempts2$nProblems)
+hist(priorAttempts2$nProblems)
+
 
 #if feedback = null this means they were not assigned to a condition
 attempts$had_feedback <- attempts$feedback_text != ""
@@ -125,18 +133,53 @@ ggplot(pkStats, aes(x=early, y=mLnTime, linetype=highPK, group=highPK)) +
    facet_wrap(~ problem_id, scales = "free")
 ggplot(pkStats, aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) + 
    geom_line(position=position_dodge(width=0.2)) + 
-   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seLnTime, ymax=mAttempts+seLnTime)) +
+   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
    facet_wrap(~ problem_id, scales = "free")
 ggplot(pkStats, aes(x=problem_id, y=mLnTime, color=early, linetype=highPK)) + 
    geom_line(position=position_dodge(width=0.2), size=1) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
 
-summary(lmer(timeRevising ~ exp * highPK + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
+summary(lmer(timeRevising ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 175,]))
+#There is a significant interaction effect between experimenrtal and high prior knowledge
 summary(lmer(nAttempts ~ exp * highPK + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 
+summary(lmer(timeRevising ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id == 172,]))
 
+
+ggplot(pkStats[pkStats$problem_id<=175, ], aes(x=exp, y=mLnTime, linetype=highPK, group=highPK)) + 
+  geom_line(position=position_dodge(width=0.2)) + scale_x_discrete(labels=c("no hints", "hints"))+ geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime)) +
+  facet_wrap(~ problem_id, scales = "free")
+
+ggplot(pkStats[pkStats$problem_id<=175, ], aes(x=exp, y=mAttempts, linetype=highPK, group=highPK)) + 
+  geom_line(position=position_dodge(width=0.2)) + scale_x_discrete(labels=c("no hints", "hints"))+ geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+  facet_wrap(~ problem_id, scales = "free")
 # pFirst correct means 1/number of attempts , so the smaller the higher the attempts they did
 ddply(byStudentWTime, c("problem_id", "early"), summarize, pFirstCorrect=mean(nAttempts == 1), n=length(nAttempts), meanTime = mean(timeRevising))
+
+
+ggplot(pkStats[pkStats$problem_id==172, ], aes(x=exp, y=mLnTime, linetype=highPK, group=highPK)) + 
+  geom_line(position=position_dodge(width=0.2)) + xlab("problem 172") + scale_x_discrete(labels=c("no hints", "hints"))+ geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
+
+#Check for low PK students in the first problem, and see the difference in hints (whether they had hints or not)
+pkStatsLow172 = byStudentWTime[byStudentWTime$highPK==FALSE & byStudentWTime$problem_id==172, ]
+condCompare(pkStatsLow172$timeRevising, pkStatsLow172$early)
+condCompare(pkStatsLow172$nAttempts, pkStatsLow172$early)
+
+pkStatsHigh172 = byStudentWTime[byStudentWTime$highPK==TRUE & byStudentWTime$problem_id==172, ]
+condCompare(pkStatsHigh172$timeRevising, pkStatsHigh172$early)
+condCompare(pkStatsHigh172$nAttempts, pkStatsHigh172$early)
+
+pkStatsNoHints172 = byStudentWTime[byStudentWTime$early==FALSE & byStudentWTime$problem_id==172, ]
+condCompare(pkStatsNoHints172$timeRevising, pkStatsNoHints172$highPK) # this is signifcant
+condCompare(pkStatsNoHints172$nAttempts, pkStatsNoHints172$highPK) #this is significant
+
+pkStatsLow173 = byStudentWTime[byStudentWTime$highPK==FALSE & byStudentWTime$problem_id==173, ]
+condCompare(pkStatsLow173$timeRevising, pkStatsLow173$early)
+condCompare(pkStatsLow173$nAttempts, pkStatsLow173$early) # this is significant
+
+pkStatsNoHints173 = byStudentWTime[byStudentWTime$early==FALSE & byStudentWTime$problem_id==173, ]
+condCompare(pkStatsNoHints173$timeRevising, pkStatsNoHints173$highPK) # this is signifcant
+condCompare(pkStatsNoHints173$nAttempts, pkStatsNoHints173$highPK) #this is significant
 
 
 ddply(attempts, c("problem_id"), summarize, 
@@ -558,16 +601,16 @@ summary(modelS1)
 modelS2 = lmer(formula = timeRevising ~  priorKn + suggest2 + showMissing2 + hLevelInt2 + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
 summary(modelS2)
 
-modelS3 = lmer(formula = timeRevising ~  priorKn + problem_id_ranked + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
+modelS3 = lmer(formula = timeRevising ~  priorKn * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
 summary(modelS3)
 
-modelS4 = lmer(formula = timeRevising ~  priorKn + problem_id_ranked + isHints + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
+modelS4 = lmer(formula = timeRevising ~  priorKn * isHints + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
 summary(modelS4)
 
-modelS5 = lmer(formula = nInCorrect ~  priorKn + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
+modelS5 = lmer(formula = nInCorrect ~  priorKn * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
 summary(modelS5)
 
-modelS6 = lmer(formula = nAttempts ~  priorKn + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
+modelS6 = lmer(formula = nAttempts ~  priorKn * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_PK, REML=FALSE)
 summary(modelS6)
 
 # Q184: how well do you want to do in this course
@@ -599,13 +642,13 @@ summary(modelM1)
 modelM2 = lmer(formula = timeRevising ~ motiv2 +suggest2 + showMissing2 + hLevelInt2 + (1 | user_id), data = lm_byStudent_WSurvey_Motiv, REML=FALSE)
 summary(modelM2)
 
-modelM3 = lmer(formula = timeRevising ~  priorKn + motiv2+ problem_id_ranked + (1 | user_id), data = lm_byStudent_WSurvey_Motiv, REML=FALSE)
+modelM3 = lmer(formula = timeRevising ~  motiv2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Motiv, REML=FALSE)
 summary(modelM3)
 
-modelM4 = lmer(formula = nAttempts ~  motiv2 + (1 | user_id), data = lm_byStudent_WSurvey_Motiv, REML=FALSE)
+modelM4 = lmer(formula = nAttempts ~  motiv2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Motiv, REML=FALSE)
 summary(modelM4)
 
-modelM5 = lmer(formula = nInCorrect ~  motiv2 + (1 | user_id), data = lm_byStudent_WSurvey_Motiv, REML=FALSE)
+modelM5 = lmer(formula = nInCorrect ~  motiv2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Motiv, REML=FALSE)
 summary(modelM5)
 
 modelM6 = lmer(formula = nInCorrect ~  priorKn + motiv2 + (1 | user_id), data = lm_byStudent_WSurvey_Motiv, REML=FALSE)
@@ -630,14 +673,14 @@ lm_byStudent_WSurvey$Q180_2_2 = ifelse(lm_byStudent_WSurvey$Q180_2>7, 1, 0)
 lm_byStudent_WSurvey_Q180 = lm_byStudent_WSurvey[lm_byStudent_WSurvey$Q180_2>0, ]
 summary(lm_byStudent_WSurvey_Q180$Q180_2)
 
-modelM7 = lmer(formula = nInCorrect ~  Q180_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
+modelM7 = lmer(formula = nInCorrect ~  Q180_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
 summary(modelM7)
 
-modelM11 = lmer(formula = nAttempts ~  Q180_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
+modelM11 = lmer(formula = nAttempts ~  Q180_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
 summary(modelM11)
 
 #marginal significance
-modelM7 = lmer(formula = timeRevising ~  Q180_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
+modelM7 = lmer(formula = timeRevising ~  Q180_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
 summary(modelM7)
 
 #marginal significance
@@ -673,15 +716,15 @@ table(lm_byStudent_WSurvey_Q176$Q176_2)
 lm_byStudent_WSurvey_Q176$Q176_2_2 = ifelse(lm_byStudent_WSurvey_Q176$Q176_2>5, 1, 0)
 
 # significant. This means students who prefer to keep guessing, had more incorrect attempts
-modelM7 = lmer(formula = nInCorrect ~  Q176_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
+modelM7 = lmer(formula = nInCorrect ~  Q176_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM7)
 
 #marginal significance
-modelM11 = lmer(formula = nAttempts ~  Q176_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
+modelM11 = lmer(formula = nAttempts ~  Q176_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM11)
 
 #marginal significance
-modelM7 = lmer(formula = timeRevising ~  Q176_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
+modelM7 = lmer(formula = timeRevising ~  Q176_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM7)
 
 # significant
@@ -689,7 +732,7 @@ modelM8 = lmer(formula = timeRevising ~  Q176_2_2 + problem_id_ranked+ (1 | user
 summary(modelM8)
 
 #marginal significant
-modelM9 = lmer(formula = timeRevising ~  Q176_2_2 + isHints+ (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
+modelM9 = lmer(formula = timeRevising ~  Q176_2_2 * isHints+ (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM9)
 
 #marginal significance
@@ -718,15 +761,15 @@ table(lm_byStudent_WSurvey_Q175$Q175_2)
 lm_byStudent_WSurvey_Q175$Q175_2_2 = ifelse(lm_byStudent_WSurvey_Q175$Q175_2>4, 1, 0)
 table(lm_byStudent_WSurvey_Q175$Q175_2_2)
 
-modelM7 = lmer(formula = nInCorrect ~  Q175_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
+modelM7 = lmer(formula = nInCorrect ~  Q175_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
 summary(modelM7)
 
 
-modelM11 = lmer(formula = nAttempts ~  Q175_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
+modelM11 = lmer(formula = nAttempts ~  Q175_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
 summary(modelM11)
 
 
-modelM7 = lmer(formula = timeRevising ~  Q175_2_2 + (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
+modelM7 = lmer(formula = timeRevising ~  Q175_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
 summary(modelM7)
 
 

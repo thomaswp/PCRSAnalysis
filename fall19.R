@@ -51,6 +51,7 @@ attempts$showMissing <- ifelse(attempts$had_hints, grepl("'showMissing': True", 
 attempts = attempts[order(attempts$user_id), ]
 attempts$timestamp <-as.POSIXct(attempts$timestamp, format="%Y-%m-%d %H:%M:%S")
 attempts = attempts[order(attempts$timestamp), ] # looks like students were doing the attempts in 2-4 minutes
+attempts$bestScore = ifelse(attempts$has_best_score=="t", TRUE, FALSE)
 problem1_attempts <- estimateParameters(attempts, 172)
 problem1_attempts = problem1_attempts[order(problem1_attempts$user_id), ]
 problem2_attempts <- estimateParameters(attempts, 173)
@@ -188,8 +189,32 @@ ddply(attempts, c("problem_id"), summarize,
       pNoFBUncomp = mean(feedback_text == "" & score == 0) / pFeedback,
       pHints = mean(grepl("'showHints': True", feedback_text, fixed=T)) / (1-pFeedback))
 
+### check dropouts between problems
+studentProblems = ddply(byStudentWTime, c("user_id"), summarise, nProblems=length(user_id), early = first(early), highPK = first(highPK))
+condCompare(studentProblems$nProblems, studentProblems$highPK) #not significant
+condCompare(studentProblems$nProblems, studentProblems$early) #not significant
+table(studentProblems$nProblems)
+hist(studentProblems$nProblems)
 
-#ddply(attempts, c("user_id"), summarize, pLogging = mean(feedback_text == ""))
+# trying to get the the order of problems
+attempts$problem_id = as.numeric(attempts$problem_id)
+attempts = attempts[order(attempts$timestamp), ]
+attempts_2 = ddply(attempts, c("user_id", "problem_id"), summarise, firstStartTime = first(timestamp), lastTime = last(timestamp))
+attempts_2 = ddply(attempts_2, c("user_id"), summarise, problems = list(problem_id))
+attempts_2 = attempts_2[order(attempts_2$user_id), ]
+attempts_2$inOrder = is.ordered(attempts_2$problems) #not working
+
+
+## only for the first 4 problems
+studentProblems = ddply(byStudentWTime[byStudentWTime$problem_id<175, ], c("user_id"), summarise, nProblems=length(user_id), early = first(early), highPK = first(highPK))
+length(studentProblems$user_id[studentProblems$nProblems<8]) ## 28.8%
+
+### prepare a small dataframe where students have the same code submitted, and it is incorrect
+caseStudyDF = attempts[attempts$problem_id==172 & attempts$bestScore==FALSE & attempts$score<4, ]
+caseStudyDF2= ddply(caseStudyDF, c("submission"), summarise, nDuplicates=length(user_id))
+write.csv(caseStudyDF2[caseStudyDF2$nDuplicates>1, ], "caseStudyDF2.csv")
+
+
 
 # remove student who got the first problem right on their first try
 studentsP1 = byStudentWTime[byStudentWTime$problem_id==172, ]
@@ -322,7 +347,8 @@ condCompare(byStudent_2_P179$pFirstCorrect, byStudent_2_P179$early)
 ### prepare dataframe for linear model (isHints, priorProblemsHints, problemsSinceLastHint)
 ##########################################################
 
-lm_byStudent = byStudent_2
+lm_byStudent2 = byStudent_2
+lm_byStudent = byStudentWTime
 lm_byStudent$problem_id = as.character(lm_byStudent$problem_id)
 
 ## does the problem has hints or not. 1 for yes, and 0 for no
@@ -363,23 +389,17 @@ lm_byStudent$problem_id_ranked = ifelse((lm_byStudent$problem_id=="177" | lm_byS
 
 #### start the models#####
 #########################
-model13 = lmer(formula = nAttempts ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model13)
+summary(lmer(formula = nAttempts ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
-model5 = lmer(formula = timeRevising ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model5)
+summary(lmer(formula = timeRevising ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
-model6 = lmer(formula = timeRevising ~ problem_id_ranked + isHints + priorProblemsHints + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model6)
+summary(lmer(formula = timeRevising ~ problem_id_ranked + isHints + priorProblemsHints + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
-model8 = lmer(formula = timeRevising ~ problem_id_ranked + isHints + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model8)
+summary(lmer(formula = timeRevising ~ problem_id_ranked + isHints + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
-model9 = lmer(formula = timeRevising ~ isHints + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model9)
+summary(lmer(formula = timeRevising ~ isHints + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
-model14 = lmer(formula = nAttempts ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(model14)
+summary(lmer(formula = nAttempts ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
 
 #####################################################################
@@ -393,44 +413,24 @@ lm_byStudent$showMissing2 = ifelse(lm_byStudent$showMissing==TRUE, 1, 0)
 modelFAll = lmer(formula = nAttempts ~ suggest2 + hLevelInt2 + showMissing2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
 summary(modelFAll)
 
-modelFAll3 = lmer(formula = nInCorrect ~ suggest2 + hLevelInt2 + showMissing2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelFAll3)
+summary(lmer(formula = nInCorrect ~ suggest2 + hLevelInt2 + showMissing2 + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
-modelFAll3 = lmer(formula = timeRevising ~ suggest2 + hLevelInt2 + showMissing2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelFAll3)
+summary(lmer(formula = timeRevising ~ suggest2 + hLevelInt2 + showMissing2 + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = timeRevising ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = nInCorrect ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
-modelFAll2 = lmer(formula = timeRevising ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelFAll2)
-
-modelFAll2 = lmer(formula = nInCorrect ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelFAll2)
-
-modelFAll3 = lmer(formula = timeRevising ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelFAll3)
-
-modelF2 = lmer(formula = nInCorrect ~ suggest2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelF2)
-
-modelF2 = lmer(formula = timeRevising ~ suggest2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelF2)
-
-modelF3 = lmer(formula = timeRevising ~ hLevelInt2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelF3)
-
-modelF4 = lmer(formula = timeRevising ~ showMissing2 + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelF4)
-
-modelF5 = lmer(formula = nInCorrect ~ suggest2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelF5)
-
-modelF6 = lmer(formula = nInCorrect ~ problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE)
-summary(modelF6)
+summary(lmer(formula = timeRevising ~ suggest2 + hLevelInt2 + showMissing2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = nInCorrect ~ suggest2 + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = timeRevising ~ suggest2 + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = timeRevising ~ hLevelInt2 + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = timeRevising ~ showMissing2 + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = nInCorrect ~ suggest2 + problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = nInCorrect ~ problem_id_ranked + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
 # non of these are significant
-lm_byStudent_172_2 = lm_byStudent[lm_byStudent$problem_id==172, ]
-condCompare(lm_byStudent_172_2$nAttempts, lm_byStudent_172_2$suggest)
-condCompare(lm_byStudent_172_2$nAttempts, lm_byStudent_172_2$showMissing)
-condCompare(lm_byStudent_172_2$nAttempts, lm_byStudent_172_2$hLevelInt)
+condCompare(lm_byStudent$nAttempts, lm_byStudent$suggest, wilcox.test, filter=(lm_byStudent$problem_id==172))
+condCompare(lm_byStudent$nAttempts, lm_byStudent$showMissing, wilcox.test, filter=(lm_byStudent$problem_id==172))
+condCompare(lm_byStudent$nAttempts, lm_byStudent$hLevelInt, wilcox.test, filter=(lm_byStudent$problem_id==172))
 
 #not significant
 condCompare(lm_byStudent_172_2$timeRevising, lm_byStudent_172_2$suggest)
@@ -579,13 +579,25 @@ ggarrange(pair1, pair2, pair3, pair4,
 ########################################
 # 1- filter data
 surveyFiltered = survey[survey$anonid %in% lm_byStudent$anonID, ]
-length(unique(lm_byStudent$user_id))
+length(unique(lm_byStudent$user_id)) # 243
 surveyFiltered$anonID = surveyFiltered$anonid
 lm_byStudent_WSurvey = lm_byStudent[lm_byStudent$anonID %in% surveyFiltered$anonid, ]
 lm_byStudent_WSurvey = merge(lm_byStudent_WSurvey, surveyFiltered, by = "anonID")
-
-## only 98 students from those who exists in the attempts have taken the survey. also there is no duplicates
-
+length(unique(lm_byStudent_WSurvey$user_id)) # 181
+pretty_survey = lm_byStudent_WSurvey[, c("user_id", "early", "highPK", "nAttempts", "Q138", "Q140", "Q142", "Q144_4", "Q144_5", "Q146_4", "Q146_5", "Q129")]
+pretty_survey_summarized = ddply(pretty_survey, c("user_id"), summarise, early = first(early), 
+                      highPK = first(highPK),
+                      mAttempts = mean(nAttempts),
+                      Q138 = first(Q138),
+                      Q140 = first(Q140),
+                      Q142 = first(Q142),
+                      Q144_4 = first(Q144_4),
+                      Q144_5 = first(Q144_5),
+                      Q146_4 = first(Q146_4),
+                      Q146_5 = first(Q146_5),
+                      Q129 = first(Q129))
+pretty_survey_summarized = pretty_survey_summarized[order(pretty_survey_summarized$highPK), ]
+write.csv(pretty_survey_summarized, "pretty_survey_summarized.csv")
 #Q186: Rate the amount of prior programming experience from 1 to 9
 # From the results below, looks like it has no interaction effect
 summary(lm_byStudent_WSurvey$Q186)
@@ -783,6 +795,11 @@ modelM10 = lmer(formula = timeRevising ~  Q175_2_2 + suggest2 + showMissing2 + h
 summary(modelM10)
 
 
+############ read survey data - open ended questions ##########
+###############################################################
+surveyQual = read.csv("data/survey_questionTitles.csv")
+surveyQual = surveyQual[order(surveyQual$StartDate), ]
+
 workingTime <- function(times, maxSep = 3) { #times is attempts of a user of a given problem id
   if (length(times) < 2) return(0)
   total = 0
@@ -809,7 +826,8 @@ estimateParameters <- function(attempts, problem_id){
       pCorrect = mean(userAttempts$correct),
       had_hints = any(userAttempts$had_hints[userAttempts$had_feedback]),
       had_feedback = any(userAttempts$had_feedback),
-      nInCorrect = sum(userAttempts$correct==FALSE)
+      nInCorrect = sum(userAttempts$correct==FALSE),
+      mBestScore = mean(userAttempts$bestScore)
     ))
   }
   timePerProblem <- timePerProblem[-1,]

@@ -64,26 +64,26 @@ attemptsTime = rbind(problem1_attempts, problem2_attempts, problem3_attempts, pr
 attemptsTime <- merge(attemptsTime, priorKnowledge)
 
 
-# add hints factors to students dataframe since the hint factor should be for the student, not for specific problem. We already know what are the problems with hints.
-students <- ddply(attempts, "user_id", summarize,
-                  anonID = first(hashed_id),
-                  n = length(had_feedback),
-                  pFeedback = mean(had_feedback),
-                  pHints = mean(had_hints[had_feedback]),
-                  early = if (pFeedback == 0) NA else any(early, na.rm=T),
-                  suggest = any(suggest, na.rm=TRUE),
-                  hLevelInt = any(hLevelInt, na.rm=TRUE),
-                  showMissing = any(showMissing, na.rm=TRUE)
-                  )
+byStudentWTime <- merge(students, attemptsTime)
+byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),]
+byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
+byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
+byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
+
+byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
+# No significant difference in # of highPK students in each group
+chisq.test(byStudent172$early, byStudent172$highPK)
+# No overall difference between conditions in % first correct on first problem
+chisq.test(byStudent172$firstCorrect, byStudent172$early)
+# No significant differences in firstCorrect between the two groups (though its darn close...)
+chisq.test(byStudent172$firstCorrect[byStudent172$highPK], byStudent172$early[byStudent172$highPK])
+chisq.test(byStudent172$firstCorrect[!byStudent172$highPK], byStudent172$early[!byStudent172$highPK])
+
 
 mean(students$pFeedback > 0)
 # 119 students in the Early condition, and 124 in the False
 table(students$early)
 
-byStudentWTime <- merge(students, attemptsTime)
-byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),]
-byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
-byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
 ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + facet_wrap(~ problem_id)
 
 ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
@@ -118,11 +118,13 @@ ggplot(timeStats, aes(x=isAssessment+0, y=pFirstCorrect, color=early)) +
 condCompare(log(byStudentWTime$timeRevising+1), byStudentWTime$early, filter=byStudentWTime$problem_id==176, test=t.test)
 condCompare(byStudentWTime$timeRevising==0, byStudentWTime$early, filter=byStudentWTime$problem_id==176, test=fisher.test)
 
-pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize, 
+pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
+                   n=length(problem_id),
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
                    mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
                    mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
-                   pFirstCorrect=mean(timeRevising==0))
+                   pFirstCorrect=mean(firstCorrect),
+                   seFirstCorrect = se.prop(pFirstCorrect, n))
 pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
 pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
 pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
@@ -135,11 +137,15 @@ ggplot(pkStats, aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) +
    geom_line(position=position_dodge(width=0.2)) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
    facet_wrap(~ problem_id, scales = "free")
+ggplot(pkStats, aes(x=early, y=pFirstCorrect, linetype=highPK, group=highPK)) + 
+  geom_line(position=position_dodge(width=0.2)) + 
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=pFirstCorrect-seFirstCorrect, ymax=pFirstCorrect+seFirstCorrect)) +
+  facet_wrap(~ problem_id, scales = "free")
 ggplot(pkStats, aes(x=problem_id, y=mLnTime, color=early, linetype=highPK)) + 
    geom_line(position=position_dodge(width=0.2), size=1) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
 
-summary(lmer(timeRevising ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 175,]))
+summary(lmer(timeRevising ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 #There is a significant interaction effect between experimenrtal and high prior knowledge
 summary(lmer(nAttempts ~ exp * highPK + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 
@@ -798,7 +804,11 @@ estimateParameters <- function(attempts, problem_id){
   timePerProblem <- NA
   for (user_id in unique(problemAttempts$user_id)) {
     userAttempts <- problemAttempts[problemAttempts$user_id == user_id,]
-    userAttempts = userAttempts[order(userAttempts$timestamp), ]
+    userAttempts <- userAttempts[order(userAttempts$timestamp), ]
+    # Find the last attempt before they've gotten it right
+    lastValidAttempt <- min(c(which(userAttempts$correct), nrow(userAttempts)))
+    # Keep only through that attempt (i.e. ignore attempts after correct)
+    userAttempts <- userAttempts[1:lastValidAttempt,]
     timePerProblem <- rbind(timePerProblem, data.frame(
       problem_id = problem_id,
       user_id = user_id,

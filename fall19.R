@@ -6,14 +6,12 @@ library(lmerTest)
 library(ggpubr)
 
 
-
-allAttempts <- read.csv("data/pyandexpt.csv")
 consenters <- read.csv("data/consenters.csv")
+allAttempts <- read.csv("data/pyandexpt.csv")
 allAttempts <- allAttempts[allAttempts$user_id %in% consenters$student_id,]
 survey <- read.csv("data/survey.csv") # survey data can be linked to attempts data by : anonId and hashed_id
 
 attempts <- allAttempts[allAttempts$quest_id == 49,]
-attempts <- attempts[attempts$user_id %in% consenters$student_id,]
 
 priorAttempts <- ddply(allAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id))
 priorAttempts <- priorAttempts[priorAttempts$problem_id < 172,]
@@ -53,7 +51,6 @@ attempts$timestamp <-as.POSIXct(attempts$timestamp, format="%Y-%m-%d %H:%M:%S")
 attempts = attempts[order(attempts$timestamp), ] # looks like students were doing the attempts in 2-4 minutes
 attempts$bestScore = ifelse(attempts$has_best_score=="t", TRUE, FALSE)
 problem1_attempts <- estimateParameters(attempts, 172)
-problem1_attempts = problem1_attempts[order(problem1_attempts$user_id), ]
 problem2_attempts <- estimateParameters(attempts, 173)
 problem3_attempts <- estimateParameters(attempts, 174)
 problem4_attempts <- estimateParameters(attempts, 175)
@@ -64,8 +61,6 @@ problem8_attempts <- estimateParameters(attempts, 179)
 attemptsTime = rbind(problem1_attempts, problem2_attempts, problem3_attempts, problem4_attempts, problem5_attempts, problem6_attempts, problem7_attempts, problem8_attempts)
 attemptsTime <- merge(attemptsTime, priorKnowledge)
 
-
-# add hints factors to students dataframe since the hint factor should be for the student, not for specific problem. We already know what are the problems with hints.
 students <- ddply(attempts, "user_id", summarize,
                   anonID = first(hashed_id),
                   n = length(had_feedback),
@@ -77,14 +72,27 @@ students <- ddply(attempts, "user_id", summarize,
                   showMissing = any(showMissing, na.rm=TRUE)
                   )
 
-mean(students$pFeedback > 0)
-# 119 students in the Early condition, and 124 in the False
-table(students$early)
-
 byStudentWTime <- merge(students, attemptsTime)
 byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),] #1731
 byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
 byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
+byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
+byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
+
+byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
+# No significant difference in # of highPK students in each group
+chisq.test(byStudent172$early, byStudent172$highPK)
+# No significant different in mz score either, in either the high or lowPK groups
+condCompare(byStudent172$mz, byStudent172$early)
+ggplot(byStudent172, aes(y=mz,x=early)) + geom_boxplot() + facet_wrap(~ highPK)
+condCompare(byStudent172$mz, byStudent172$early, filter=!byStudent172$highPK)
+# No overall difference between conditions in % first correct on first problem
+chisq.test(byStudent172$firstCorrect, byStudent172$early)
+# No significant differences in firstCorrect between the two groups (though its darn close...)
+chisq.test(byStudent172$firstCorrect[byStudent172$highPK], byStudent172$early[byStudent172$highPK])
+chisq.test(byStudent172$firstCorrect[!byStudent172$highPK], byStudent172$early[!byStudent172$highPK])
+
+
 ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + facet_wrap(~ problem_id)
 
 ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
@@ -125,11 +133,14 @@ ggplot(timeStats, aes(x=isAssessment+0, y=pFirstCorrect, color=early)) +
 condCompare(log(byStudentWTime$timeRevising+1), byStudentWTime$early, filter=byStudentWTime$problem_id==176, test=t.test)
 condCompare(byStudentWTime$timeRevising==0, byStudentWTime$early, filter=byStudentWTime$problem_id==176, test=fisher.test)
 
-pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize, 
+noIntervention <- byStudentWTime$user_id[byStudentWTime$problem_id == 172 & byStudentWTime$firstCorrect]
+pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
+                   n=length(problem_id),
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
                    mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
                    mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
-                   pFirstCorrect=mean(timeRevising==0))
+                   pFirstCorrect=mean(firstCorrect),
+                   seFirstCorrect = se.prop(pFirstCorrect, n))
 pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
 pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
 pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
@@ -137,20 +148,47 @@ pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
 ggplot(pkStats, aes(x=early, y=mLnTime, linetype=highPK, group=highPK)) + 
    geom_line(position=position_dodge(width=0.2)) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime)) +
-   facet_wrap(~ problem_id, scales = "free")
+   facet_wrap(~ problem_id, scales = "free", ncol=2)
 ggplot(pkStats, aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) + 
    geom_line(position=position_dodge(width=0.2)) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
-   facet_wrap(~ problem_id, scales = "free")
+   facet_wrap(~ problem_id, scales = "free", ncol=2)
+ggplot(pkStats, aes(x=early, y=pFirstCorrect, linetype=highPK, group=highPK)) + 
+  geom_line(position=position_dodge(width=0.2)) + 
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=pFirstCorrect-seFirstCorrect, ymax=pFirstCorrect+seFirstCorrect)) +
+  facet_wrap(~ problem_id, scales = "free", ncol=2)
 ggplot(pkStats, aes(x=problem_id, y=mLnTime, color=early, linetype=highPK)) + 
    geom_line(position=position_dodge(width=0.2), size=1) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
 
-summary(lmer(timeRevising ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 175,]))
+summary(lmer(timeRevising ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 #There is a significant interaction effect between experimenrtal and high prior knowledge
-summary(lmer(nAttempts ~ exp * highPK + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
+summary(lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 
-summary(lmer(timeRevising ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id == 172,]))
+# There not a significant effect of having hints for low PK students overall
+summary(lmer(nAttempts ~ exp + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176 & !byStudentWTime$highPK,]))
+
+# 172: Significant difference between high and low for no-hints, but not hints
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 172 & byStudentWTime$early)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 172 & !byStudentWTime$early)
+# 172: No significant differences between hints and no hints in either group, but both have a small (NS) effect in opposite directions
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172 & byStudentWTime$highPK)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172 & !byStudentWTime$highPK)
+
+# 173: Significant difference between high and low for no-hints, but not hints
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 173 & byStudentWTime$early)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 173 & !byStudentWTime$early)
+
+# 174: Non-significant difference (med effect size) between high and low for no-hints, but not hints
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 174 & byStudentWTime$early)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 174 & !byStudentWTime$early)
+# 174: No significant differences between hints and no hints in either group, but both have a small (NS) effect in opposite directions
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174 & byStudentWTime$highPK)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174 & !byStudentWTime$highPK)
+
+# 175: Non-significant difference (med effect size) between high and low for no-hints, but not hints
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 174 & byStudentWTime$early)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 174 & !byStudentWTime$early)
 
 
 ggplot(pkStats[pkStats$problem_id<=175, ], aes(x=exp, y=mLnTime, linetype=highPK, group=highPK)) + 
@@ -860,7 +898,11 @@ estimateParameters <- function(attempts, problem_id){
   timePerProblem <- NA
   for (user_id in unique(problemAttempts$user_id)) {
     userAttempts <- problemAttempts[problemAttempts$user_id == user_id,]
-    userAttempts = userAttempts[order(userAttempts$timestamp), ]
+    userAttempts <- userAttempts[order(userAttempts$timestamp), ]
+    # Find the last attempt before they've gotten it right
+    lastValidAttempt <- min(c(which(userAttempts$correct), nrow(userAttempts)))
+    # Keep only through that attempt (i.e. ignore attempts after correct)
+    userAttempts <- userAttempts[1:lastValidAttempt,]
     timePerProblem <- rbind(timePerProblem, data.frame(
       problem_id = problem_id,
       user_id = user_id,

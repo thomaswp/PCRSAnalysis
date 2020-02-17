@@ -4,6 +4,7 @@ library(ggplot2)
 library(lme4)
 library(lmerTest)
 library(ggpubr)
+library(rbin)
 
 
 consenters <- read.csv("data/consenters.csv")
@@ -24,6 +25,7 @@ mean(priorKnowledge$sdz)
 priorKnowledge$highPK <- priorKnowledge$mz < median(priorKnowledge$mz)
 table(priorKnowledge$highPK)
 priorKnowledge <- priorKnowledge[priorKnowledge$user_id %in% attempts$user_id,]
+priorKnowledge$pkRank <- rank(priorKnowledge$mz)
 attempts <- merge(attempts, priorKnowledge)
 
 ## just to verify
@@ -78,6 +80,9 @@ byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
 byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
 byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
 byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
+byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_id - 172 + 1]
+byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
+
 
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
 # No significant difference in # of highPK students in each group
@@ -98,11 +103,13 @@ ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin
 ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
 ggplot(byStudentWTime, aes(log(timeRevising+1))) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
 
-byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_id - 172 + 1]
-byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
 
 #scatter plot
-ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=nAttempts, x=mz, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3) + facet_wrap(~ isAssessment, scales = "free")
+ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=pmin(nAttempts, 5), x=mz, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm) + facet_wrap(~ problem_id, scales = "free")
+ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=nAttempts, x=pkRank, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm) + facet_wrap(~ problem_id, scales = "free")
+ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=pmin(nAttempts, 5), x=pkRank, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm, level=0.683) + facet_wrap(~ problem_id, scales = "free")
+ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, mz, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
+
 
 timeStats <- ddply(byStudentWTime, c("problem_id", "early"), summarize, 
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),

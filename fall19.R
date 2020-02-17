@@ -8,8 +8,8 @@ library(ggpubr)
 
 
 allAttempts <- read.csv("data/pyandexpt.csv")
-allAttempts <- allAttempts[allAttempts$user_id %in% consenters$student_id,]
 consenters <- read.csv("data/consenters.csv")
+allAttempts <- allAttempts[allAttempts$user_id %in% consenters$student_id,]
 survey <- read.csv("data/survey.csv") # survey data can be linked to attempts data by : anonId and hashed_id
 
 attempts <- allAttempts[allAttempts$quest_id == 49,]
@@ -82,13 +82,19 @@ mean(students$pFeedback > 0)
 table(students$early)
 
 byStudentWTime <- merge(students, attemptsTime)
-byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),]
+byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),] #1731
 byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
 byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
 ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + facet_wrap(~ problem_id)
 
 ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
 ggplot(byStudentWTime, aes(log(timeRevising+1))) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
+
+byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_id - 172 + 1]
+byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
+
+#scatter plot
+ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=nAttempts, x=mz, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3) + facet_wrap(~ isAssessment, scales = "free")
 
 timeStats <- ddply(byStudentWTime, c("problem_id", "early"), summarize, 
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
@@ -194,15 +200,54 @@ studentProblems = ddply(byStudentWTime, c("user_id"), summarise, nProblems=lengt
 condCompare(studentProblems$nProblems, studentProblems$highPK) #not significant
 condCompare(studentProblems$nProblems, studentProblems$early) #not significant
 table(studentProblems$nProblems)
+# 28.8% dropped out
+length(studentProblems$user_id[studentProblems$nProblems<8])/length(studentProblems$user_id)
+# 37/70 dropped out of early = true . 29.8% of early group dropped out
+length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$early==TRUE])/length(studentProblems$user_id[studentProblems$early==TRUE])
+# 27.73% of late group dropped out
+length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$early==FALSE])/length(studentProblems$user_id[studentProblems$early==FALSE])
+# 27.48% of students with high PK dropped out
+length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$highPK==TRUE])/length(studentProblems$user_id[studentProblems$highPK==TRUE])
+# 30.35% of students with low PK dropped out
+length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$highPK==FALSE])/length(studentProblems$user_id[studentProblems$highPK==FALSE])
+
 hist(studentProblems$nProblems)
 
 # trying to get the the order of problems
 attempts$problem_id = as.numeric(attempts$problem_id)
 attempts = attempts[order(attempts$timestamp), ]
-attempts_2 = ddply(attempts, c("user_id", "problem_id"), summarise, firstStartTime = first(timestamp), lastTime = last(timestamp))
-attempts_2 = ddply(attempts_2, c("user_id"), summarise, problems = list(problem_id))
+attempts <- attempts[!is.na(attempts$early),]
+attempts_2 = ddply(attempts, c("user_id", "problem_id"), summarise, firstStartTime = min(timestamp), lastTime = max(timestamp), n = length(user_id), early=first(early), highPK=first(highPK))
 attempts_2 = attempts_2[order(attempts_2$user_id), ]
-attempts_2$inOrder = is.ordered(attempts_2$problems) #not working
+attempts_2 = attempts_2[order(attempts_2$user_id), ]
+attempts_2$inOrder = FALSE
+
+for (user_id in unique(attempts_2$user_id)) {
+  userAttempts <- attempts_2[attempts_2$user_id == user_id,]
+  userAttempts = userAttempts[order(userAttempts$lastTime), ]
+  inOrder = TRUE
+  item = userAttempts$problem_id[1]
+    for (i in 2:length(userAttempts)){
+      if(!is.na(userAttempts$problem_id[i])){
+        if (userAttempts$problem_id[i]>=item){
+          item = userAttempts$problem_id[i]
+        }else {
+          inOrder = FALSE
+        }
+      }
+  }
+  attempts_2$inOrder[attempts_2$user_id==user_id] = inOrder
+}
+attempts_2 = ddply(attempts_2, c("user_id"), summarise, early=first(early), highPK=first(highPK), inOrder=first(inOrder))
+summary(attempts_2$inOrder) # 15.6% of students did it out of order
+# 22.32% of low PK did it out of order 
+length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$highPK==FALSE])/length(attempts_2$user_id[attempts_2$highPK==FALSE])
+# 9% of high PK did it out of order
+length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$highPK==TRUE])/length(attempts_2$user_id[attempts_2$highPK==TRUE])
+# 14.51% in early condition did it out of order
+length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$early==TRUE])/length(attempts_2$user_id[attempts_2$early==TRUE])
+# 16.8% in late condition did it out of order
+length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$early==FALSE])/length(attempts_2$user_id[attempts_2$early==FALSE])
 
 
 ## only for the first 4 problems

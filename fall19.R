@@ -50,6 +50,16 @@ attempts = attempts[order(attempts$user_id), ]
 attempts$timestamp <-as.POSIXct(attempts$timestamp, format="%Y-%m-%d %H:%M:%S")
 attempts = attempts[order(attempts$timestamp), ] # looks like students were doing the attempts in 2-4 minutes
 attempts$bestScore = ifelse(attempts$has_best_score=="t", TRUE, FALSE)
+
+#verify that conditions are flipped:
+test = attempts[!is.na(attempts$early), ]
+table(test$early[test$problem_id==172 | test$problem_id==173])
+length(test$user_id[test$early==FALSE & (test$problem_id==172 | test$problem_id==173) & (is.na(test$suggest) & is.na(test$hLevelInt) & is.na(test$showMissing))])
+# 0 students in early = FALSE, in problems 172, and 173 and does not have any hint
+length(test$user_id[test$early==FALSE & (test$problem_id==172 | test$problem_id==173) & (is.na(test$suggest) & is.na(test$hLevelInt) & is.na(test$showMissing))])
+# 0 students in early = TRUE, in problems 176, and 177 and does not have any hint
+length(test$user_id[test$early==TRUE & (test$problem_id==176 | test$problem_id==177) & (is.na(test$suggest) & is.na(test$hLevelInt) & is.na(test$showMissing))])
+
 problem1_attempts <- estimateParameters(attempts, 172)
 problem2_attempts <- estimateParameters(attempts, 173)
 problem3_attempts <- estimateParameters(attempts, 174)
@@ -92,11 +102,16 @@ chisq.test(byStudent172$firstCorrect, byStudent172$early)
 chisq.test(byStudent172$firstCorrect[byStudent172$highPK], byStudent172$early[byStudent172$highPK])
 chisq.test(byStudent172$firstCorrect[!byStudent172$highPK], byStudent172$early[!byStudent172$highPK])
 
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
+
 
 ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + facet_wrap(~ problem_id)
 
 ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
 ggplot(byStudentWTime, aes(log(timeRevising+1))) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early)
 
 byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_id - 172 + 1]
 byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
@@ -293,13 +308,24 @@ studentProblems = ddply(byStudentWTime[byStudentWTime$problem_id<175, ], c("user
 length(studentProblems$user_id[studentProblems$nProblems<8]) ## 28.8%
 
 ### prepare a small dataframe where students have the same code submitted, and it is incorrect
-caseStudyDF = attempts[attempts$problem_id==172 & attempts$bestScore==FALSE & attempts$score<4, ]
-caseStudyDF2= ddply(caseStudyDF, c("submission"), summarise, nDuplicates=length(user_id))
-write.csv(caseStudyDF2[caseStudyDF2$nDuplicates>1, ], "caseStudyDF2.csv")
-
-
-
+caseStudyDF = attempts[attempts$problem_id==172 & attempts$bestScore==FALSE & attempts$score==2, ]
+caseStudyDF <- caseStudyDF[!is.na(caseStudyDF$early),] 
+caseStudyDF2= ddply(caseStudyDF, c("user_id", "submission"), summarise, nDuplicates=length(user_id), early = first(early), highPK = first(highPK))
+write.csv(caseStudyDF2, "caseStudyDF2.csv")
+write.csv(caseStudyDF, "caseStudyDF.csv")
+# I found 2 cases with the same incorrect code
+cases = attempts[attempts$user_id==12899 | attempts$user_id==13004, ]
+#cases = cases[cases$problem_id==172, ]
+cases = cases[, c("user_id", "problem_id", "early", "highPK", "submission", "feedback_text", "score", "timestamp")]
+cases = cases[order(cases$timestamp), ]
+write.csv(cases, "cases.csv")
+## (13240, 13004)These are 2 cases where they should be in the early condition, however they got hints in problem 177 and 176
 # remove student who got the first problem right on their first try
+
+casesTest = attempts[attempts$user_id==13004, ]
+casesTest = casesTest[, c("user_id", "early", "highPK", "problem_id" ,"submission", "feedback_text", "score", "timestamp", "had_hints", "reverse" ,"suggest", "hLevelInt", "showMissing")]
+
+
 studentsP1 = byStudentWTime[byStudentWTime$problem_id==172, ]
 studentsP1 = studentsP1[order(studentsP1$user_id), ]
 # 240 rows
@@ -327,6 +353,7 @@ byStudent_2_172 = byStudent_2[byStudent_2$problem_id==172, ]
 condCompare(byStudent_2_172$pCorrect, byStudent_2_172$early)
 condCompare(byStudent_2_172$nInCorrect, byStudent_2_172$early)
 condCompare(byStudent_2_172$timeRevising, byStudent_2_172$early)
+condCompare(byStudent_2_172$nAttempts, byStudent_2_172$early)
 # Early condition = 64 students
 length(unique(byStudent_2_172$user_id[byStudent_2_172$early==TRUE]))
 

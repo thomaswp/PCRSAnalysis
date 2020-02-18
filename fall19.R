@@ -41,11 +41,15 @@ hist(priorAttempts2$nProblems)
 attempts$had_feedback <- attempts$feedback_text != ""
 attempts$had_hints <- ifelse(attempts$had_feedback, grepl("'showHints': True", attempts$feedback_text, fixed=T), NA)
 attempts$reverse <- ifelse(attempts$had_feedback, grepl("'reversedShow': True", attempts$feedback_text, fixed=T), NA)
-attempts$early <- ifelse(attempts$had_feedback, attempts$had_hints == attempts$reverse, NA)
+attempts$saw_hint <- ifelse(attempts$had_feedback, grepl("'hadCodeSuggestion': True", attempts$feedback_text, fixed=T), NA)
+# Reverse was False for the first 2 problems, but True for 5 and 6, so if you had hints when reverse was false, you were in the early group
+attempts$early <- ifelse(attempts$had_feedback, attempts$had_hints != attempts$reverse, NA)
 attempts$correct <- attempts$score == attempts$max_score
 attempts$suggest <- ifelse(attempts$had_hints, grepl("'suggest': True", attempts$feedback_text, fixed=T), NA)
 attempts$hLevelInt <- ifelse(attempts$had_hints, grepl("'highlightLevelInt': 2", attempts$feedback_text, fixed=T), NA)
 attempts$showMissing <- ifelse(attempts$had_hints, grepl("'showMissing': True", attempts$feedback_text, fixed=T), NA)
+# table(attempts$had_hints, attempts$saw_hint+0) # Verify hints were only seen when shown
+# table(attempts$early, attempts$saw_hint+0, attempts$problem_id) # Verify hints were only seen when they should be
 
 ## calculate all parameters for each problem for each student
 attempts = attempts[order(attempts$user_id), ]
@@ -85,6 +89,12 @@ byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_
 
 
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
+# Oddly, no difference in firstCorrect between high and low PK
+chisq.test(byStudent172$firstCorrect, byStudent172$highPK)
+# But a near-significant difference in total attempts
+condCompare(byStudent172$nAttempts, byStudent172$highPK)
+# And a significant (but small) correlation
+cor.test(byStudent172$nAttempts, byStudent172$mz, method = "spearman")
 # No significant difference in # of highPK students in each group
 chisq.test(byStudent172$early, byStudent172$highPK)
 # No significant different in mz score either, in either the high or lowPK groups
@@ -174,6 +184,12 @@ summary(lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data=byS
 
 # There not a significant effect of having hints for low PK students overall
 summary(lmer(nAttempts ~ exp + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176 & !byStudentWTime$highPK,]))
+
+# Over all problems, definitely an effect of PK on performance
+summary(lmer(nAttempts ~ mz + problem_id_nom + (1 | user_id), data=byStudentWTime))
+# Similarly strong over the first four problems
+summary(lmer(nAttempts ~ mz + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
+condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK)
 
 # 172: Significant difference between high and low for no-hints, but not hints
 condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 172 & byStudentWTime$early)

@@ -110,7 +110,6 @@ byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_
 
 #### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
 for (user_id in unique(byStudentWTime$user_id)) {
-  userAttempts <- byStudentWTime[byStudentWTime$user_id == user_id,]
   byStudentWTime$maxFirst4Probs[byStudentWTime$user_id==user_id]= max(byStudentWTime$timeStopped[byStudentWTime$problem_id<176 & byStudentWTime$user_id==user_id], na.rm = TRUE)
   byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176) & byStudentWTime$user_id==user_id])
 }
@@ -122,6 +121,28 @@ length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE]))
 
 length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$highPK==TRUE])) # 4/12 from the highPK, 8/12 from lowPK
 length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$early==FALSE])) # 7/12 from the exp and 5 from control
+
+#Remove those 12 students
+byStudentWTime = byStudentWTime[byStudentWTime$isOrdered == TRUE, ]
+
+### check students who did problem 175 before 173, and those who did problem 174 before 172
+byStudentWTime$isAssessmentFirst =  FALSE
+users172 = byStudentWTime[byStudentWTime$problem_id==172, ]
+users173 = byStudentWTime[byStudentWTime$problem_id==173, ]
+users174 = byStudentWTime[byStudentWTime$problem_id==174, ]
+users175 = byStudentWTime[byStudentWTime$problem_id==175, ]
+for (user_id in unique(byStudentWTime$user_id)) {
+  # I have to make sure that this students attempted both problems 1A and 2A, and similarly for 1B and 2B
+  if(user_id %in% users172$user_id & user_id %in% users174$user_id){
+    byStudentWTime$isAssessmentFirst[byStudentWTime$user_id==user_id]= ifelse((byStudentWTime$timeStopped[byStudentWTime$problem_id==172 & byStudentWTime$user_id==user_id]) > 
+                                                                                (byStudentWTime$timeStopped[byStudentWTime$problem_id==174 & byStudentWTime$user_id==user_id]), TRUE, byStudentWTime$isAssessmentFirst[byStudentWTime$user_id==user_id])
+  }
+  if(user_id %in% users173$user_id & user_id %in% users175$user_id){
+    byStudentWTime$isAssessmentFirst[byStudentWTime$user_id==user_id]= ifelse((byStudentWTime$timeStopped[byStudentWTime$problem_id==173 & byStudentWTime$user_id==user_id]) > 
+                                                                                (byStudentWTime$timeStopped[byStudentWTime$problem_id==175 & byStudentWTime$user_id==user_id]), TRUE, byStudentWTime$isAssessmentFirst[byStudentWTime$user_id==user_id])
+  }
+}
+length(unique(byStudentWTime$user_id[byStudentWTime$isAssessmentFirst==TRUE])) # they are 2 and they are already included in those 12, so now length is 0
 ##########################
 
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]

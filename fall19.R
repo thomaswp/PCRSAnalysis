@@ -110,38 +110,39 @@ byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_
 #byStudentWTime$nAttemptsUncapped <- byStudentWTime$nAttempts
 #byStudentWTime$nAttempts <- pmin(byStudentWTime$nAttempts, 10)
 
-#### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
+#### (ddply is not WORKING) Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
 attemptsOrder = ddply(byStudentWTime, ("user_id"), summarize, maxTime4Probs = pmax(byStudentWTime$timeStopped[byStudentWTime$problem_id<176]),
                      minTime4Probs = pmin(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176)]),
                      isHighPK = first(highPK))
 
 attemptsOrder$isOrdered = ifelse(attemptsOrder$maxTime4Probs < attemptsOrder$minTime4Probs, FALSE, TRUE)
-# check
-t4 = attemptsTime[attemptsTime$user_id==12748, ]
 
+#### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
 byStudentWTime$minLast4Probs = 0
+byStudentWTime$maxFirst4Probs = 0
 usersLess176 = byStudentWTime[byStudentWTime$problem_id<176, ] 
-users175176 = byStudentWTime[byStudentWTime$problem_id==176 | byStudentWTime$problem_id==175, ] 
+users176177 = byStudentWTime[byStudentWTime$problem_id==176 | byStudentWTime$problem_id==177, ] 
 for (user_id in unique(byStudentWTime$user_id)) {
   if(user_id %in% usersLess176$user_id){
     byStudentWTime$maxFirst4Probs[byStudentWTime$user_id==user_id]= max(byStudentWTime$timeStopped[byStudentWTime$problem_id<176 & byStudentWTime$user_id==user_id], na.rm = TRUE)
   }
-  if(user_id %in% users175176$user_id){
-    byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176) & byStudentWTime$user_id==user_id])
+  if(user_id %in% users176177$user_id){
+    byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==176 | byStudentWTime$problem_id==177) & byStudentWTime$user_id==user_id])
   }
 }
-# any student with 0 value in either maxFirst4Probs or minLast4Probs means that he/she did not attempt either any of the first 4 problems or the last 4 problems.
-# Sanity check: These 2 students 13730 , 13553 were in the experimental condition and only did problem 176, or 176 and 177, so they have seen hints. I will remove them
-
-studentsAttemptedLastFirst = byStudentWTime[byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, ]
-length(unique(studentsAttemptedLastFirst$user_id)) # 12/243 0.057%
-byStudentWTime$isOrdered = ifelse(byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, FALSE, TRUE)
+# Sanity check any student with 0 value in either maxFirst4Probs or minLast4Probs means that he/she did not attempt either any of the first 4 problems or the last 4 problems.
+# For example: These 2 students 13730 , 13553 were in the experimental condition and only did problem 176, or 176 and 177, so they have seen hints. I will remove them
+byStudentWTime$isOrdered = ifelse(byStudentWTime$maxFirst4Probs > byStudentWTime$minLast4Probs, FALSE, TRUE)
+# for those who did not do the first part, part 1 = 0 and part 2 is greater, so we need to remove them
+byStudentWTime$isOrdered = ifelse(byStudentWTime$maxFirst4Probs==0, FALSE, byStudentWTime$isOrdered)
+# also, those who only did part 1, their part 2 is 0, so they are treated as inOrdered, however I think they should be treated as ordered
+byStudentWTime$isOrdered = ifelse(byStudentWTime$minLast4Probs==0, TRUE, byStudentWTime$isOrdered)
 length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE]))
 
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$highPK==TRUE])) # 4/12 from the highPK, 8/12 from lowPK
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$early==FALSE])) # 7/12 from the exp and 5 from control
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$highPK==TRUE])) # 5/13 from the highPK, 8/13 from lowPK
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$early==FALSE])) # 6/13 from the exp and 7/14 from control
 
-#Remove those 12 students
+#Remove those 13 students
 byStudentWTime = byStudentWTime[byStudentWTime$isOrdered == TRUE, ]
 
 ### check students who did problem 175 before 173, and those who did problem 174 before 172
@@ -161,7 +162,10 @@ for (user_id in unique(byStudentWTime$user_id)) {
                                                                                 (byStudentWTime$timeStopped[byStudentWTime$problem_id==175 & byStudentWTime$user_id==user_id]), TRUE, byStudentWTime$isAssessmentFirst[byStudentWTime$user_id==user_id])
   }
 }
-length(unique(byStudentWTime$user_id[byStudentWTime$isAssessmentFirst==TRUE])) # they are 2 and they are already included in those 12, so now length is 0
+# 1 student other than those 
+length(unique(byStudentWTime$user_id[byStudentWTime$isAssessmentFirst==TRUE])) # they are 2 and 1 is already included in those 13
+byStudentWTime = byStudentWTime[byStudentWTime$isAssessmentFirst == FALSE, ]
+length(unique(byStudentWTime$user_id)) # 229 students after removing 14 students in total.
 ##########################
 
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]

@@ -109,10 +109,27 @@ byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_
 byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
 
 #### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
+attemptsOrder = ddply(byStudentWTime, ("user_id"), summarize, maxTime4Probs = pmax(byStudentWTime$timeStopped[byStudentWTime$problem_id<176]),
+                     minTime4Probs = pmin(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176)]),
+                     isHighPK = first(highPK))
+
+attemptsOrder$isOrdered = ifelse(attemptsOrder$maxTime4Probs < attemptsOrder$minTime4Probs, FALSE, TRUE)
+# check
+t4 = attemptsTime[attemptsTime$user_id==12748, ]
+
+byStudentWTime$minLast4Probs = 0
+usersLess176 = byStudentWTime[byStudentWTime$problem_id<176, ] 
+users175176 = byStudentWTime[byStudentWTime$problem_id==176 | byStudentWTime$problem_id==175, ] 
 for (user_id in unique(byStudentWTime$user_id)) {
-  byStudentWTime$maxFirst4Probs[byStudentWTime$user_id==user_id]= max(byStudentWTime$timeStopped[byStudentWTime$problem_id<176 & byStudentWTime$user_id==user_id], na.rm = TRUE)
-  byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176) & byStudentWTime$user_id==user_id])
+  if(user_id %in% usersLess176$user_id){
+    byStudentWTime$maxFirst4Probs[byStudentWTime$user_id==user_id]= max(byStudentWTime$timeStopped[byStudentWTime$problem_id<176 & byStudentWTime$user_id==user_id], na.rm = TRUE)
+  }
+  if(user_id %in% users175176$user_id){
+    byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176) & byStudentWTime$user_id==user_id])
+  }
 }
+# any student with 0 value in either maxFirst4Probs or minLast4Probs means that he/she did not attempt either any of the first 4 problems or the last 4 problems.
+# Sanity check: These 2 students 13730 , 13553 were in the experimental condition and only did problem 176, or 176 and 177, so they have seen hints. I will remove them
 
 studentsAttemptedLastFirst = byStudentWTime[byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, ]
 length(unique(studentsAttemptedLastFirst$user_id)) # 12/243 0.057%

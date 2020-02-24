@@ -121,7 +121,9 @@ ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=pmin(nAttempts, 5),
 ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, mz, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
 
 
+# RQ1
 timeStats <- ddply(byStudentWTime, c("problem_id", "early"), summarize, 
+                   nCorrect=sum(pCorrect > 0),
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
                    mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
                    pFirstCorrect=mean(timeRevising==0))
@@ -162,6 +164,20 @@ pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
 pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
 pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
 
+# RQ2
+ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) + 
+  geom_line(position=position_dodge(width=0.2)) + 
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+  facet_wrap(~ problem_id, scales = "free", ncol=2) +
+  theme_bw()
+
+# Not considering the interaction, there's a significant of PK
+anova(m1 <- lmer(nAttempts ~ exp + highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
+#There is a significant interaction effect between experimenrtal and high prior knowledge
+anova(m2 <- lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
+# But the interaction model is significantly better
+anova(m1, m2)
+
 ggplot(pkStats, aes(x=early, y=mLnTime, linetype=highPK, group=highPK)) + 
    geom_line(position=position_dodge(width=0.2)) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime)) +
@@ -178,18 +194,19 @@ ggplot(pkStats, aes(x=problem_id, y=mLnTime, color=early, linetype=highPK)) +
    geom_line(position=position_dodge(width=0.2), size=1) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
 
-summary(lmer(timeRevising ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
-#There is a significant interaction effect between experimenrtal and high prior knowledge
-summary(lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 
+summary(lmer(timeRevising ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 # There not a significant effect of having hints for low PK students overall
 summary(lmer(nAttempts ~ exp + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176 & !byStudentWTime$highPK,]))
+
 
 # Over all problems, definitely an effect of PK on performance
 summary(lmer(nAttempts ~ mz + problem_id_nom + (1 | user_id), data=byStudentWTime))
 # Similarly strong over the first four problems
 summary(lmer(nAttempts ~ mz + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK)
+# However, there is only a marginally significant main effect for PK if we consider the no-hint group
+anova(lmer(nAttempts ~ highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176 & !byStudentWTime$early,]))
 
 # 172: Significant difference between high and low for no-hints, but not hints
 condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 172 & byStudentWTime$early)

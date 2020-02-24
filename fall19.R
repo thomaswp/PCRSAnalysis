@@ -56,6 +56,7 @@ attempts = attempts[order(attempts$user_id), ]
 attempts$timestamp <-as.POSIXct(attempts$timestamp, format="%Y-%m-%d %H:%M:%S")
 attempts = attempts[order(attempts$timestamp), ] # looks like students were doing the attempts in 2-4 minutes
 attempts$bestScore = ifelse(attempts$has_best_score=="t", TRUE, FALSE)
+
 problem1_attempts <- estimateParameters(attempts, 172)
 problem2_attempts <- estimateParameters(attempts, 173)
 problem3_attempts <- estimateParameters(attempts, 174)
@@ -65,6 +66,7 @@ problem6_attempts <- estimateParameters(attempts, 177)
 problem7_attempts <- estimateParameters(attempts, 178)
 problem8_attempts <- estimateParameters(attempts, 179)
 attemptsTime = rbind(problem1_attempts, problem2_attempts, problem3_attempts, problem4_attempts, problem5_attempts, problem6_attempts, problem7_attempts, problem8_attempts)
+
 attemptsTime <- merge(attemptsTime, priorKnowledge)
 
 students <- ddply(attempts, "user_id", summarize,
@@ -77,8 +79,9 @@ students <- ddply(attempts, "user_id", summarize,
                   hLevelInt = any(hLevelInt, na.rm=TRUE),
                   showMissing = any(showMissing, na.rm=TRUE)
                   )
-
 byStudentWTime <- merge(students, attemptsTime)
+# 2% of students had early NA
+length(unique(byStudentWTime$user_id[is.na(byStudentWTime$early)]))/length(unique(byStudentWTime$user_id))
 byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),] #1731
 byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
 byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
@@ -86,7 +89,6 @@ byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
 byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
 byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_id - 172 + 1]
 byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
-
 
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
 # Oddly, no difference in firstCorrect between high and low PK
@@ -107,11 +109,23 @@ chisq.test(byStudent172$firstCorrect, byStudent172$early)
 chisq.test(byStudent172$firstCorrect[byStudent172$highPK], byStudent172$early[byStudent172$highPK])
 chisq.test(byStudent172$firstCorrect[!byStudent172$highPK], byStudent172$early[!byStudent172$highPK])
 
+table(byStudentWTime$early[byStudentWTime$problem_id==172])
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
+
+byStudentWTime$highPK1 = ifelse(byStudentWTime$highPK==TRUE, 1, 0)
+byStudentWTime$early1 = ifelse(byStudentWTime$early==TRUE, 1, 0)
+an = aov(nAttempts ~ highPK1 * early1 , data=byStudentWTime[byStudentWTime$problem_id<174,])
+summary(an)
+summary(lmer(nAttempts ~ early * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 174,]))
 
 ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + facet_wrap(~ problem_id)
 
 ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
 ggplot(byStudentWTime, aes(log(timeRevising+1))) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early)
 
 
 #scatter plot
@@ -164,7 +178,8 @@ pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
 pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
 pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
 
-# RQ2
+# RQ2 ======
+
 ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) + 
   geom_line(position=position_dodge(width=0.2)) + 
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
@@ -178,6 +193,8 @@ anova(m2 <- lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data
 # But the interaction model is significantly better
 anova(m1, m2)
 
+# End RQ2 =====
+
 ggplot(pkStats, aes(x=early, y=mLnTime, linetype=highPK, group=highPK)) + 
    geom_line(position=position_dodge(width=0.2)) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime)) +
@@ -186,7 +203,7 @@ ggplot(pkStats, aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) +
    geom_line(position=position_dodge(width=0.2)) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
    facet_wrap(~ problem_id, scales = "free", ncol=2)
-ggplot(pkStats, aes(x=early, y=pFirstCorrect, linetype=highPK, group=highPK)) + 
+ ggplot(pkStats, aes(x=early, y=pFirstCorrect, linetype=highPK, group=highPK)) + 
   geom_line(position=position_dodge(width=0.2)) + 
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=pFirstCorrect-seFirstCorrect, ymax=pFirstCorrect+seFirstCorrect)) +
   facet_wrap(~ problem_id, scales = "free", ncol=2)
@@ -280,9 +297,9 @@ condCompare(studentProblems$nProblems, studentProblems$early) #not significant
 table(studentProblems$nProblems)
 # 28.8% dropped out
 length(studentProblems$user_id[studentProblems$nProblems<8])/length(studentProblems$user_id)
-# 37/70 dropped out of early = true . 29.8% of early group dropped out
+# 27.73% of early group dropped out
 length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$early==TRUE])/length(studentProblems$user_id[studentProblems$early==TRUE])
-# 27.73% of late group dropped out
+# 29.8% of late group dropped out
 length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$early==FALSE])/length(studentProblems$user_id[studentProblems$early==FALSE])
 # 27.48% of students with high PK dropped out
 length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$highPK==TRUE])/length(studentProblems$user_id[studentProblems$highPK==TRUE])
@@ -322,9 +339,9 @@ summary(attempts_2$inOrder) # 15.6% of students did it out of order
 length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$highPK==FALSE])/length(attempts_2$user_id[attempts_2$highPK==FALSE])
 # 9% of high PK did it out of order
 length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$highPK==TRUE])/length(attempts_2$user_id[attempts_2$highPK==TRUE])
-# 14.51% in early condition did it out of order
+# 16.80% in early condition did it out of order
 length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$early==TRUE])/length(attempts_2$user_id[attempts_2$early==TRUE])
-# 16.8% in late condition did it out of order
+# 14.5% in late condition did it out of order
 length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$early==FALSE])/length(attempts_2$user_id[attempts_2$early==FALSE])
 
 
@@ -334,12 +351,40 @@ length(studentProblems$user_id[studentProblems$nProblems<8]) ## 28.8%
 
 ### prepare a small dataframe where students have the same code submitted, and it is incorrect
 caseStudyDF = attempts[attempts$problem_id==172 & attempts$bestScore==FALSE & attempts$score<4, ]
-caseStudyDF2= ddply(caseStudyDF, c("submission"), summarise, nDuplicates=length(user_id))
-write.csv(caseStudyDF2[caseStudyDF2$nDuplicates>1, ], "caseStudyDF2.csv")
+#caseStudyDF <- caseStudyDF[!is.na(caseStudyDF$early),] 
+caseStudyDF2= ddply(caseStudyDF, c("user_id", "submission"), summarise, nDuplicates=length(user_id), score = first(score), early = first(early), highPK = first(highPK))
+caseStudyDF2 = caseStudyDF2[order(caseStudyDF2$user_id), ]
+caseStudyDF2_HPK = caseStudyDF2[caseStudyDF2$highPK==TRUE, ]
+caseStudyDF2_LPK = caseStudyDF2[caseStudyDF2$highPK==FALSE, ]
+write.csv(caseStudyDF2_LPK, "caseStudyDF2_LPK.csv")
+write.csv(caseStudyDF2_HPK, "caseStudyDF2_HPK.csv")
+write.csv(caseStudyDF2, "caseStudyDF2.csv")
+# I found 2 cases with the same incorrect code
+case1 = attempts[attempts$user_id==12899, ]
+case1 = case1[, c("user_id", "problem_id", "early", "highPK", "submission", "feedback_text", "score", "max_score","timestamp")]
+case2 = attempts[attempts$user_id==13004, ]
+case2 = case2[, c("user_id", "problem_id", "early", "highPK", "submission", "feedback_text", "score", "max_score","timestamp")]
 
+case1 = case1[order(case1$timestamp), ]
+#cases = cases[cases$problem_id==172, ]
+case2 = case2[order(case2$timestamp), ]
+# estimate time between hints for these students
+case1$timeDiff = 0
+case2$timeDiff = 0
+for (i in 2:length(case1)) {
+    case1$timeDiff[i] =  as.numeric(case1$timestamp[i] - case1$timestamp[i-1], units="mins")
+}
 
+cases = cases[, c("user_id", "problem_id", "early", "highPK", "submission", "feedback_text", "score", "max_score","timestamp")]
 
-# remove student who got the first problem right on their first try
+test2 = ddply(cases, c("user_id", "problem_id"), summarise, n = length(user_id))
+write.csv(cases, "cases.csv")
+
+#may need to make sure that students in the analysis are those who did all the 8 problems.
+studentsW8Problems = ddply(byStudentWTime, c("user_id"), summarise, nProblems=length(unique(problem_id)), early = first(early), highPK = first(highPK))
+studentsWN8Problems = studentsW8Problems[studentsW8Problems$nProblems<8, ]
+byStudentWTime=byStudentWTime[!byStudentWTime$user_id %in% studentsWN8Problems$user_id, ]
+
 studentsP1 = byStudentWTime[byStudentWTime$problem_id==172, ]
 studentsP1 = studentsP1[order(studentsP1$user_id), ]
 # 240 rows
@@ -367,6 +412,7 @@ byStudent_2_172 = byStudent_2[byStudent_2$problem_id==172, ]
 condCompare(byStudent_2_172$pCorrect, byStudent_2_172$early)
 condCompare(byStudent_2_172$nInCorrect, byStudent_2_172$early)
 condCompare(byStudent_2_172$timeRevising, byStudent_2_172$early)
+condCompare(byStudent_2_172$nAttempts, byStudent_2_172$early)
 # Early condition = 64 students
 length(unique(byStudent_2_172$user_id[byStudent_2_172$early==TRUE]))
 
@@ -523,6 +569,7 @@ summary(lmer(formula = timeRevising ~ problem_id_ranked + isHints + (1 | user_id
 summary(lmer(formula = timeRevising ~ isHints + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
 summary(lmer(formula = nAttempts ~ earlyCond + problem_id_ranked + isHints + problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE))
+summary(lmer(formula = nAttempts ~ earlyCond * problemsSinceLastHint + (1 | user_id), data = lm_byStudent, REML=FALSE))
 
 
 #####################################################################
@@ -814,25 +861,18 @@ summary(modelM7)
 modelM11 = lmer(formula = nAttempts ~  Q180_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
 summary(modelM11)
 
-#marginal significance
 modelM7 = lmer(formula = timeRevising ~  Q180_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
 summary(modelM7)
 
-#marginal significance
 modelM8 = lmer(formula = timeRevising ~  Q180_2_2 + problem_id_ranked+ (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
 summary(modelM8)
 
-modelM9 = lmer(formula = timeRevising ~  Q180_2_2 + isHints+ (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
-summary(modelM9)
-
-#marginal significance
 modelM10 = lmer(formula = timeRevising ~  Q180_2_2 + suggest2 + showMissing2 + hLevelInt2 + (1 | user_id), data = lm_byStudent_WSurvey_Q180, REML=FALSE)
 summary(modelM10)
 
 ###########################################
 #### Q176: I tend to guess quickly on PCRS problems until I get the answer rather than try to solve 
 #### the problem before I choose the answer 
-#### It's significance in most models
 ###############################################
 lm_byStudent_WSurvey$Q176_2 = 0
 lm_byStudent_WSurvey$Q176_2 = ifelse(lm_byStudent_WSurvey$Q176=="Strongly disagree", 1, lm_byStudent_WSurvey$Q176_2)
@@ -850,23 +890,18 @@ summary(lm_byStudent_WSurvey_Q176$Q176_2)
 table(lm_byStudent_WSurvey_Q176$Q176_2)
 lm_byStudent_WSurvey_Q176$Q176_2_2 = ifelse(lm_byStudent_WSurvey_Q176$Q176_2>5, 1, 0)
 
-# significant. This means students who prefer to keep guessing, had more incorrect attempts
 modelM7 = lmer(formula = nInCorrect ~  Q176_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM7)
 
-#marginal significance
 modelM11 = lmer(formula = nAttempts ~  Q176_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM11)
 
-#marginal significance
 modelM7 = lmer(formula = timeRevising ~  Q176_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM7)
 
-# significant
 modelM8 = lmer(formula = timeRevising ~  Q176_2_2 + problem_id_ranked+ (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM8)
 
-#marginal significant
 modelM9 = lmer(formula = timeRevising ~  Q176_2_2 * isHints+ (1 | user_id), data = lm_byStudent_WSurvey_Q176, REML=FALSE)
 summary(modelM9)
 
@@ -906,16 +941,6 @@ summary(modelM11)
 
 modelM7 = lmer(formula = timeRevising ~  Q175_2_2 * earlyCond + (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
 summary(modelM7)
-
-
-modelM8 = lmer(formula = timeRevising ~  Q175_2_2 + problem_id_ranked+ (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
-summary(modelM8)
-
-modelM9 = lmer(formula = timeRevising ~  Q175_2_2 + isHints+ (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
-summary(modelM9)
-
-modelM10 = lmer(formula = timeRevising ~  Q175_2_2 + suggest2 + showMissing2 + hLevelInt2 + (1 | user_id), data = lm_byStudent_WSurvey_Q175, REML=FALSE)
-summary(modelM10)
 
 
 ############ read survey data - open ended questions ##########

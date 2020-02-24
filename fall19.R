@@ -5,6 +5,7 @@ library(lme4)
 library(lmerTest)
 library(ggpubr)
 library(rbin)
+library(car)
 
 
 consenters <- read.csv("data/consenters.csv")
@@ -89,6 +90,8 @@ byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
 byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
 byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_id - 172 + 1]
 byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
+#byStudentWTime$nAttemptsUncapped <- byStudentWTime$nAttempts
+#byStudentWTime$nAttempts <- pmin(byStudentWTime$nAttempts, 10)
 
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
 # Oddly, no difference in firstCorrect between high and low PK
@@ -135,13 +138,14 @@ ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=pmin(nAttempts, 5),
 ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, mz, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
 
 
-# RQ1
+# RQ1 ======
 timeStats <- ddply(byStudentWTime, c("problem_id", "early"), summarize, 
                    nCorrect=sum(pCorrect > 0),
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
                    mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
                    pFirstCorrect=mean(timeRevising==0))
 timeStats
+# End RQ1 ======
 
 ggplot(timeStats, aes(x=problem_id, y=mTime, color=early)) + 
    geom_line(position=position_dodge(width=0.2)) + 
@@ -167,18 +171,17 @@ condCompare(log(byStudentWTime$timeRevising+1), byStudentWTime$early, filter=byS
 condCompare(byStudentWTime$timeRevising==0, byStudentWTime$early, filter=byStudentWTime$problem_id==176, test=fisher.test)
 
 noIntervention <- byStudentWTime$user_id[byStudentWTime$problem_id == 172 & byStudentWTime$firstCorrect]
-pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
-                   n=length(problem_id),
-                   mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
-                   mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
-                   mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
-                   pFirstCorrect=mean(firstCorrect),
-                   seFirstCorrect = se.prop(pFirstCorrect, n))
-pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
-pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
-pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
+
+
 
 # RQ2 ======
+pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
+                 n=length(problem_id),
+                 mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
+                 mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
+                 mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
+                 pFirstCorrect=mean(firstCorrect),
+                 seFirstCorrect = se.prop(pFirstCorrect, n))
 
 ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) + 
   geom_line(position=position_dodge(width=0.2)) + 
@@ -193,7 +196,21 @@ anova(m2 <- lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data
 # But the interaction model is significantly better
 anova(m1, m2)
 
+# Discussion
+byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
+condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=byStudent172$early)
+condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=!byStudent172$early)
+
 # End RQ2 =====
+
+Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 172,]), type="III")
+Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 173,]), type="III")
+Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 174,]), type="III")
+Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 175,]), type="III")
+
+pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
+pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
+pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
 
 ggplot(pkStats, aes(x=early, y=mLnTime, linetype=highPK, group=highPK)) + 
    geom_line(position=position_dodge(width=0.2)) + 
@@ -203,7 +220,7 @@ ggplot(pkStats, aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) +
    geom_line(position=position_dodge(width=0.2)) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
    facet_wrap(~ problem_id, scales = "free", ncol=2)
- ggplot(pkStats, aes(x=early, y=pFirstCorrect, linetype=highPK, group=highPK)) + 
+ggplot(pkStats, aes(x=early, y=pFirstCorrect, linetype=highPK, group=highPK)) + 
   geom_line(position=position_dodge(width=0.2)) + 
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=pFirstCorrect-seFirstCorrect, ymax=pFirstCorrect+seFirstCorrect)) +
   facet_wrap(~ problem_id, scales = "free", ncol=2)

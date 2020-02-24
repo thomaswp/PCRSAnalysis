@@ -34,8 +34,7 @@ for (problemID in unique(allPriorAttempts$problem_id)) {
 
 #priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
 meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
-meanAttempts = meanAttempts[meanAttempts$problem_id!=55, ]
-priorAttempts = priorAttempts[priorAttempts$problem_id!=55, ] # 25244
+meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
 priorAttempts <- merge(priorAttempts, meanAttempts)
 priorAttempts$zAttempts <- (priorAttempts$nAttempts - priorAttempts$mAttempts) / priorAttempts$sdAttempt
 priorKnowledge <- ddply(priorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts))

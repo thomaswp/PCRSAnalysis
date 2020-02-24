@@ -108,6 +108,22 @@ byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
 byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_id - 172 + 1]
 byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
 
+#### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
+for (user_id in unique(byStudentWTime$user_id)) {
+  userAttempts <- byStudentWTime[byStudentWTime$user_id == user_id,]
+  byStudentWTime$maxFirst4Probs[byStudentWTime$user_id==user_id]= max(byStudentWTime$timeStopped[byStudentWTime$problem_id<176 & byStudentWTime$user_id==user_id], na.rm = TRUE)
+  byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176) & byStudentWTime$user_id==user_id])
+}
+
+studentsAttemptedLastFirst = byStudentWTime[byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, ]
+length(unique(studentsAttemptedLastFirst$user_id)) # 12/243 0.057%
+byStudentWTime$isOrdered = ifelse(byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, FALSE, TRUE)
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE]))
+
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$highPK==TRUE])) # 4/12 from the highPK, 8/12 from lowPK
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$early==FALSE])) # 7/12 from the exp and 5 from control
+##########################
+
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
 # Oddly, no difference in firstCorrect between high and low PK
 chisq.test(byStudent172$firstCorrect, byStudent172$highPK)
@@ -305,21 +321,6 @@ length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$hig
 length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$highPK==FALSE])/length(studentProblems$user_id[studentProblems$highPK==FALSE])
 
 hist(studentProblems$nProblems)
-
-#### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
-for (user_id in unique(byStudentWTime$user_id)) {
-  userAttempts <- byStudentWTime[byStudentWTime$user_id == user_id,]
-  byStudentWTime$maxFirst4Probs[byStudentWTime$user_id==user_id]= max(byStudentWTime$timeStopped[byStudentWTime$problem_id<176 & byStudentWTime$user_id==user_id], na.rm = TRUE)
-  byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176) & byStudentWTime$user_id==user_id])
-}
-
-studentsAttemptedLastFirst = byStudentWTime[byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, ]
-length(unique(studentsAttemptedLastFirst$user_id)) # 12/243 0.057%
-byStudentWTime$isOrdered = ifelse(byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, FALSE, TRUE)
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE]))
-
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$highPK==TRUE])) # 4/12 from the highPK, 8/12 from lowPK
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$early==FALSE])) # 7/12 from the exp and 5 from control
 
 # trying to get the the order of problems
 attempts$problem_id = as.numeric(attempts$problem_id)

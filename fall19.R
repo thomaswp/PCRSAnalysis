@@ -14,9 +14,27 @@ survey <- read.csv("data/survey.csv") # survey data can be linked to attempts da
 
 attempts <- allAttempts[allAttempts$quest_id == 49,]
 
-priorAttempts <- ddply(allAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id))
-priorAttempts <- priorAttempts[priorAttempts$problem_id < 172,]
+allAttempts$timestamp <-as.POSIXct(allAttempts$timestamp, format="%Y-%m-%d %H:%M:%S")
+getTimeOfStudy = allAttempts[allAttempts$problem_id>=172 & allAttempts$problem_id<=179, ]
+getTimeOfStudy = getTimeOfStudy[order(getTimeOfStudy$timestamp), ] # The estimated time of the start of the study "2019-12-12 09:35:41 EST"
+allPriorAttempts = allAttempts[allAttempts$problem_id<172 & allAttempts$timestamp<"2019-12-12 09:35:41", ]
+length(unique(allPriorAttempts$problem_id)) # 71 unique problem
+allPriorAttempts$correct <- allPriorAttempts$score == allPriorAttempts$max_score
+start = TRUE
+for (problemID in unique(allPriorAttempts$problem_id)) {
+  problem_attempts <- estimatePriorAttempts(allPriorAttempts, problemID)
+  if(start==TRUE){
+    priorAttempts = problem_attempts
+    start = FALSE
+  }else{
+    priorAttempts = rbind(priorAttempts, problem_attempts)
+  }
+}
+
+#priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
 meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
+meanAttempts = meanAttempts[meanAttempts$problem_id!=55, ]
+priorAttempts = priorAttempts[priorAttempts$problem_id!=55, ] # 25244
 priorAttempts <- merge(priorAttempts, meanAttempts)
 priorAttempts$zAttempts <- (priorAttempts$nAttempts - priorAttempts$mAttempts) / priorAttempts$sdAttempt
 priorKnowledge <- ddply(priorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts))
@@ -31,7 +49,7 @@ attempts <- merge(attempts, priorKnowledge)
 ## just to verify
 #################
 priorAttempts <- priorAttempts[priorAttempts$user_id %in% attempts$user_id,]
-length(unique(priorAttempts$problem_id)) # There is 71 problems
+length(unique(priorAttempts$problem_id)) # There is 71 problems, but after excluding problem 55, they are 70
 priorAttempts2 <- ddply(priorAttempts, "user_id", summarize, nProblems = length(problem_id))
 summary(priorAttempts2$nProblems)
 hist(priorAttempts2$nProblems)
@@ -93,7 +111,7 @@ byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
 # Oddly, no difference in firstCorrect between high and low PK
 chisq.test(byStudent172$firstCorrect, byStudent172$highPK)
-# But a near-significant difference in total attempts
+# But a significant difference in total attempts
 condCompare(byStudent172$nAttempts, byStudent172$highPK)
 # And a significant (but small) correlation
 cor.test(byStudent172$nAttempts, byStudent172$mz, method = "spearman")
@@ -107,7 +125,7 @@ condCompare(byStudent172$mz, byStudent172$early, filter=!byStudent172$highPK)
 chisq.test(byStudent172$firstCorrect, byStudent172$early)
 # No significant differences in firstCorrect between the two groups (though its darn close...)
 chisq.test(byStudent172$firstCorrect[byStudent172$highPK], byStudent172$early[byStudent172$highPK])
-chisq.test(byStudent172$firstCorrect[!byStudent172$highPK], byStudent172$early[!byStudent172$highPK])
+chisq.test(byStudent172$firstCorrect[!byStudent172$highPK], byStudent172$early[!byStudent172$highPK]) # marginal significance between lowPK with and without hints
 
 table(byStudentWTime$early[byStudentWTime$problem_id==172])
 condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
@@ -125,7 +143,7 @@ ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin
 
 ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
 ggplot(byStudentWTime, aes(log(timeRevising+1))) + geom_histogram() + facet_wrap(~ problem_id) + scale_x_continuous(limits=c(0,10))
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id <176)
 
 
 #scatter plot
@@ -193,7 +211,7 @@ ggplot(pkStats, aes(x=problem_id, y=mLnTime, color=early, linetype=highPK)) +
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
 
 summary(lmer(timeRevising ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
-#There is a significant interaction effect between experimenrtal and high prior knowledge
+#There is a marginal significant interaction effect between experimenrtal and high prior knowledge
 summary(lmer(nAttempts ~ exp * highPK  + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 
 # There not a significant effect of having hints for low PK students overall
@@ -272,7 +290,7 @@ ddply(attempts, c("problem_id"), summarize,
 
 ### check dropouts between problems
 studentProblems = ddply(byStudentWTime, c("user_id"), summarise, nProblems=length(user_id), early = first(early), highPK = first(highPK))
-condCompare(studentProblems$nProblems, studentProblems$highPK) #not significant
+condCompare(studentProblems$nProblems, studentProblems$highPK) # significant
 condCompare(studentProblems$nProblems, studentProblems$early) #not significant
 table(studentProblems$nProblems)
 # 28.8% dropped out
@@ -281,12 +299,27 @@ length(studentProblems$user_id[studentProblems$nProblems<8])/length(studentProbl
 length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$early==TRUE])/length(studentProblems$user_id[studentProblems$early==TRUE])
 # 29.8% of late group dropped out
 length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$early==FALSE])/length(studentProblems$user_id[studentProblems$early==FALSE])
-# 27.48% of students with high PK dropped out
+# 23.13% of students with high PK dropped out
 length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$highPK==TRUE])/length(studentProblems$user_id[studentProblems$highPK==TRUE])
-# 30.35% of students with low PK dropped out
+# 35.77% of students with low PK dropped out
 length(studentProblems$user_id[studentProblems$nProblems<8 & studentProblems$highPK==FALSE])/length(studentProblems$user_id[studentProblems$highPK==FALSE])
 
 hist(studentProblems$nProblems)
+
+#### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
+for (user_id in unique(byStudentWTime$user_id)) {
+  userAttempts <- byStudentWTime[byStudentWTime$user_id == user_id,]
+  byStudentWTime$maxFirst4Probs[byStudentWTime$user_id==user_id]= max(byStudentWTime$timeStopped[byStudentWTime$problem_id<176 & byStudentWTime$user_id==user_id], na.rm = TRUE)
+  byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176) & byStudentWTime$user_id==user_id])
+}
+
+studentsAttemptedLastFirst = byStudentWTime[byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, ]
+length(unique(studentsAttemptedLastFirst$user_id)) # 12/243 0.057%
+byStudentWTime$isOrdered = ifelse(byStudentWTime$minLast4Probs< byStudentWTime$maxFirst4Probs, FALSE, TRUE)
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE]))
+
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$highPK==TRUE])) # 4/12 from the highPK, 8/12 from lowPK
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$early==FALSE])) # 7/12 from the exp and 5 from control
 
 # trying to get the the order of problems
 attempts$problem_id = as.numeric(attempts$problem_id)
@@ -294,8 +327,14 @@ attempts = attempts[order(attempts$timestamp), ]
 attempts <- attempts[!is.na(attempts$early),]
 attempts_2 = ddply(attempts, c("user_id", "problem_id"), summarise, firstStartTime = min(timestamp), lastTime = max(timestamp), n = length(user_id), early=first(early), highPK=first(highPK))
 attempts_2 = attempts_2[order(attempts_2$user_id), ]
-attempts_2 = attempts_2[order(attempts_2$user_id), ]
+#Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
+length(unique(attempts_2$user_id)) # 243
+attempts_2$unOrdered = FALSE
+
+
+notInOrder = attempts_2[attempts]
 attempts_2$inOrder = FALSE
+attempts_2 = attempts_2[attempts_2$problem_id<178, ]
 
 for (user_id in unique(attempts_2$user_id)) {
   userAttempts <- attempts_2[attempts_2$user_id == user_id,]
@@ -315,9 +354,9 @@ for (user_id in unique(attempts_2$user_id)) {
 }
 attempts_2 = ddply(attempts_2, c("user_id"), summarise, early=first(early), highPK=first(highPK), inOrder=first(inOrder))
 summary(attempts_2$inOrder) # 15.6% of students did it out of order
-# 22.32% of low PK did it out of order 
+# 22.01% of low PK did it out of order 
 length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$highPK==FALSE])/length(attempts_2$user_id[attempts_2$highPK==FALSE])
-# 9% of high PK did it out of order
+# 10.44% of high PK did it out of order
 length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$highPK==TRUE])/length(attempts_2$user_id[attempts_2$highPK==TRUE])
 # 16.80% in early condition did it out of order
 length(attempts_2$user_id[attempts_2$inOrder==FALSE & attempts_2$early==TRUE])/length(attempts_2$user_id[attempts_2$early==TRUE])
@@ -960,6 +999,26 @@ estimateParameters <- function(attempts, problem_id){
       had_feedback = any(userAttempts$had_feedback),
       nInCorrect = sum(userAttempts$correct==FALSE),
       mBestScore = mean(userAttempts$bestScore)
+    ))
+  }
+  timePerProblem <- timePerProblem[-1,]
+  return (timePerProblem)
+}
+
+estimatePriorAttempts <- function(attempts, problem_id){
+  problemAttempts <- attempts[attempts$problem_id == problem_id,]
+  timePerProblem <- NA
+  for (user_id in unique(problemAttempts$user_id)) {
+    userAttempts <- problemAttempts[problemAttempts$user_id == user_id,]
+    userAttempts <- userAttempts[order(userAttempts$timestamp), ]
+    # Find the last attempt before they've gotten it right
+    lastValidAttempt <- min(c(which(userAttempts$correct), nrow(userAttempts)))
+    # Keep only through that attempt (i.e. ignore attempts after correct)
+    userAttempts <- userAttempts[1:lastValidAttempt,]
+    timePerProblem <- rbind(timePerProblem, data.frame(
+      problem_id = problem_id,
+      user_id = user_id,
+      nAttempts = nrow(userAttempts)
     ))
   }
   timePerProblem <- timePerProblem[-1,]

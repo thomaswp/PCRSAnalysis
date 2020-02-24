@@ -5,6 +5,7 @@ library(lme4)
 library(lmerTest)
 library(ggpubr)
 library(rbin)
+library(car)
 
 
 consenters <- read.csv("data/consenters.csv")
@@ -33,8 +34,7 @@ for (problemID in unique(allPriorAttempts$problem_id)) {
 
 #priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
 meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
-meanAttempts = meanAttempts[meanAttempts$problem_id!=55, ]
-priorAttempts = priorAttempts[priorAttempts$problem_id!=55, ] # 25244
+meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
 priorAttempts <- merge(priorAttempts, meanAttempts)
 priorAttempts$zAttempts <- (priorAttempts$nAttempts - priorAttempts$mAttempts) / priorAttempts$sdAttempt
 priorKnowledge <- ddply(priorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts))
@@ -98,7 +98,7 @@ students <- ddply(attempts, "user_id", summarize,
                   showMissing = any(showMissing, na.rm=TRUE)
                   )
 byStudentWTime <- merge(students, attemptsTime)
-#0.020% of students had early NA
+# 2% of students had early NA
 length(unique(byStudentWTime$user_id[is.na(byStudentWTime$early)]))/length(unique(byStudentWTime$user_id))
 byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),] #1731
 byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
@@ -107,6 +107,8 @@ byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
 byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
 byStudentWTime$isAssessment <- c(F, F, T, T, F, F, T, T)[byStudentWTime$problem_id - 172 + 1]
 byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_id - 172 + 1]
+#byStudentWTime$nAttemptsUncapped <- byStudentWTime$nAttempts
+#byStudentWTime$nAttempts <- pmin(byStudentWTime$nAttempts, 10)
 
 #### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
 attemptsOrder = ddply(byStudentWTime, ("user_id"), summarize, maxTime4Probs = pmax(byStudentWTime$timeStopped[byStudentWTime$problem_id<176]),
@@ -207,11 +209,14 @@ ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=pmin(nAttempts, 5),
 ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, mz, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
 
 
+# RQ1 ======
 timeStats <- ddply(byStudentWTime, c("problem_id", "early"), summarize, 
+                   nCorrect=sum(pCorrect > 0),
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
                    mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
                    pFirstCorrect=mean(timeRevising==0))
 timeStats
+# End RQ1 ======
 
 ggplot(timeStats, aes(x=problem_id, y=mTime, color=early)) + 
    geom_line(position=position_dodge(width=0.2)) + 
@@ -237,13 +242,43 @@ condCompare(log(byStudentWTime$timeRevising+1), byStudentWTime$early, filter=byS
 condCompare(byStudentWTime$timeRevising==0, byStudentWTime$early, filter=byStudentWTime$problem_id==176, test=fisher.test)
 
 noIntervention <- byStudentWTime$user_id[byStudentWTime$problem_id == 172 & byStudentWTime$firstCorrect]
+
+
+
+# RQ2 ======
 pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
-                   n=length(problem_id),
-                   mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
-                   mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
-                   mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
-                   pFirstCorrect=mean(firstCorrect),
-                   seFirstCorrect = se.prop(pFirstCorrect, n))
+                 n=length(problem_id),
+                 mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
+                 mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
+                 mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
+                 pFirstCorrect=mean(firstCorrect),
+                 seFirstCorrect = se.prop(pFirstCorrect, n))
+
+ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) + 
+  geom_line(position=position_dodge(width=0.2)) + 
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+  facet_wrap(~ problem_id, scales = "free", ncol=2) +
+  theme_bw()
+
+# Not considering the interaction, there's a significant of PK
+anova(m1 <- lmer(nAttempts ~ exp + highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
+#There is a significant interaction effect between experimenrtal and high prior knowledge
+anova(m2 <- lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
+# But the interaction model is significantly better
+anova(m1, m2)
+
+# Discussion
+byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
+condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=byStudent172$early)
+condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=!byStudent172$early)
+
+# End RQ2 =====
+
+Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 172,]), type="III")
+Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 173,]), type="III")
+Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 174,]), type="III")
+Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 175,]), type="III")
+
 pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
 pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
 pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
@@ -256,7 +291,7 @@ ggplot(pkStats, aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) +
    geom_line(position=position_dodge(width=0.2)) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
    facet_wrap(~ problem_id, scales = "free", ncol=2)
- ggplot(pkStats, aes(x=early, y=pFirstCorrect, linetype=highPK, group=highPK)) + 
+ggplot(pkStats, aes(x=early, y=pFirstCorrect, linetype=highPK, group=highPK)) + 
   geom_line(position=position_dodge(width=0.2)) + 
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=pFirstCorrect-seFirstCorrect, ymax=pFirstCorrect+seFirstCorrect)) +
   facet_wrap(~ problem_id, scales = "free", ncol=2)
@@ -264,18 +299,19 @@ ggplot(pkStats, aes(x=problem_id, y=mLnTime, color=early, linetype=highPK)) +
    geom_line(position=position_dodge(width=0.2), size=1) + 
    geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnTime-seLnTime, ymax=mLnTime+seLnTime))
 
-summary(lmer(timeRevising ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
-#There is a marginal significant interaction effect between experimenrtal and high prior knowledge
-summary(lmer(nAttempts ~ exp * highPK  + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 
+summary(lmer(timeRevising ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 # There not a significant effect of having hints for low PK students overall
 summary(lmer(nAttempts ~ exp + problem_id + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176 & !byStudentWTime$highPK,]))
+
 
 # Over all problems, definitely an effect of PK on performance
 summary(lmer(nAttempts ~ mz + problem_id_nom + (1 | user_id), data=byStudentWTime))
 # Similarly strong over the first four problems
 summary(lmer(nAttempts ~ mz + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]))
 condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK)
+# However, there is only a marginally significant main effect for PK if we consider the no-hint group
+anova(lmer(nAttempts ~ highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176 & !byStudentWTime$early,]))
 
 # 172: Significant difference between high and low for no-hints, but not hints
 condCompare(byStudentWTime$nAttempts, byStudentWTime$highPK, filter=byStudentWTime$problem_id == 172 & byStudentWTime$early)

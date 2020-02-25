@@ -10,10 +10,19 @@ library(car)
 
 consenters <- read.csv("data/consenters.csv")
 allAttempts <- read.csv("data/pyandexpt.csv")
+### Length of all students: 1055
+(length(unique(allAttempts$user_id)))
+### Length of Consenters: 401
+(length(unique(consenters$student_id)))
+
 allAttempts <- allAttempts[allAttempts$user_id %in% consenters$student_id,]
 survey <- read.csv("data/survey.csv") # survey data can be linked to attempts data by : anonId and hashed_id
 
+
+
 attempts <- allAttempts[allAttempts$quest_id == 49,]
+### Length of students who attempted the 6 problems in the study: 248
+(length(unique(attempts$user_id)))
 
 allAttempts$timestamp <-as.POSIXct(allAttempts$timestamp, format="%Y-%m-%d %H:%M:%S")
 getTimeOfStudy = allAttempts[allAttempts$problem_id>=172 & allAttempts$problem_id<=179, ]
@@ -32,7 +41,7 @@ for (problemID in unique(allPriorAttempts$problem_id)) {
   }
 }
 
-#priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
+priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
 meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
 meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
 priorAttempts <- merge(priorAttempts, meanAttempts)
@@ -100,7 +109,13 @@ students <- ddply(attempts, "user_id", summarize,
 byStudentWTime <- merge(students, attemptsTime)
 # 2% of students had early NA
 length(unique(byStudentWTime$user_id[is.na(byStudentWTime$early)]))/length(unique(byStudentWTime$user_id))
+(mean(byStudentWTime$pCorrect[byStudentWTime$pCorrect>0]))
 byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),] #1731
+##### length of students in the early group: 119
+(length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE])))
+##### length of students in the late group: 124
+(length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE])))
+##########################
 byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
 byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
 byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
@@ -137,7 +152,7 @@ byStudentWTime$isOrdered = ifelse(byStudentWTime$maxFirst4Probs > byStudentWTime
 byStudentWTime$isOrdered = ifelse(byStudentWTime$maxFirst4Probs==0, FALSE, byStudentWTime$isOrdered)
 # also, those who only did part 1, their part 2 is 0, so they are treated as inOrdered, however I think they should be treated as ordered
 byStudentWTime$isOrdered = ifelse(byStudentWTime$minLast4Probs==0, TRUE, byStudentWTime$isOrdered)
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE]))
+length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE])) # 13 students should be filtered out
 
 length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$highPK==TRUE])) # 5/13 from the highPK, 8/13 from lowPK
 length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$early==FALSE])) # 6/13 from the exp and 7/14 from control
@@ -164,9 +179,14 @@ for (user_id in unique(byStudentWTime$user_id)) {
 }
 # 1 student other than those 
 length(unique(byStudentWTime$user_id[byStudentWTime$isAssessmentFirst==TRUE])) # they are 2 and 1 is already included in those 13
+# This student is in the control condition
+length(unique(byStudentWTime$user_id[byStudentWTime$isAssessmentFirst==TRUE & byStudentWTime$early==TRUE]))
 byStudentWTime = byStudentWTime[byStudentWTime$isAssessmentFirst == FALSE, ]
 length(unique(byStudentWTime$user_id)) # 229 students after removing 14 students in total.
 ##########################
+
+#the number of attempts correlates strongly with the total \textit{time} a student spent on the problem
+cor.test(byStudentWTime$nAttempts, byStudentWTime$timeRevising, method = "spearman")
 
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
 # Oddly, no difference in firstCorrect between high and low PK
@@ -188,10 +208,7 @@ chisq.test(byStudent172$firstCorrect[byStudent172$highPK], byStudent172$early[by
 chisq.test(byStudent172$firstCorrect[!byStudent172$highPK], byStudent172$early[!byStudent172$highPK]) # marginal significance between lowPK with and without hints
 
 table(byStudentWTime$early[byStudentWTime$problem_id==172])
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
+
 
 byStudentWTime$highPK1 = ifelse(byStudentWTime$highPK==TRUE, 1, 0)
 byStudentWTime$early1 = ifelse(byStudentWTime$early==TRUE, 1, 0)
@@ -212,8 +229,30 @@ ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=nAttempts, x=pkRank
 ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=pmin(nAttempts, 5), x=pkRank, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm, level=0.683) + facet_wrap(~ problem_id, scales = "free")
 ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, mz, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
 
-
+## students almost always got the problem correct \textit{eventually} (96.77\% of the time)
+(mean(byStudentWTime$pCorrect > 0))
 # RQ1 ======
+(length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE]))) # 112
+(length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE]))) # 118
+# Table 1 in the paper
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
+# length of students who completed this problem eventually
+(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==172 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
+(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==172 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
+
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
+(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==173 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
+(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==173 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
+
+
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
+(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==174 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
+(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==174 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
+
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
+(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==175 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
+(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==175 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
+
 timeStats <- ddply(byStudentWTime, c("problem_id", "early"), summarize, 
                    nCorrect=sum(pCorrect > 0),
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
@@ -258,11 +297,62 @@ pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
                  pFirstCorrect=mean(firstCorrect),
                  seFirstCorrect = se.prop(pFirstCorrect, n))
 
-ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=highPK, group=highPK)) + 
+pkStats$Prior_Knowledge = ifelse(pkStats$highPK==TRUE, "High", "Low")
+ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=Prior_Knowledge, group=Prior_Knowledge))+ scale_fill_discrete(name = "Prior Knowledge", labels = c("Low", "High")) +
   geom_line(position=position_dodge(width=0.2)) + 
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
-  facet_wrap(~ problem_id, scales = "free", ncol=2) +
-  theme_bw()
+  facet_wrap(~ problem_id,scales = "free", ncol=2) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints")) 
+
+P172Plot = ggplot(pkStats, aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) +  geom_line(position=position_dodge(width=0.2)) +ylab("Average number of attempts")+ geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) + theme(legend.position = "none")
+P172Plot = ggplot(pkStats[pkStats$problem_id == 172,], aes(x=early, y=mAttempts, linetype=Prior_Knowledge, group=Prior_Knowledge))+ 
+  scale_x_discrete(labels = c("Control", "Hints"))+
+  geom_line(position=position_dodge(width=0.2)) + 
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints")) 
+
+P172Plot = ggplot(pkStats[pkStats$problem_id == 172,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +  scale_x_discrete(labels = c("Control", "Hints"))+ 
+  theme(legend.position = "none") +
+  theme(axis.title.x=element_blank(),
+      axis.ticks.x=element_blank(),
+      axis.title.y=element_blank(),
+      axis.ticks.y=element_blank()
+      )
+plot(P172Plot)
+P173Plot = ggplot(pkStats[pkStats$problem_id == 173,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+  theme(legend.position = "none") + scale_x_discrete(labels = c("Control", "Hints"))+ 
+  theme(axis.title.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.ticks.y=element_blank()
+  )
+
+plot(P173Plot)
+P174Plot = ggplot(pkStats[pkStats$problem_id == 174,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+  theme(legend.position = "none") + scale_x_discrete(labels = c("Control", "Hints"))+ 
+  theme(axis.title.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.ticks.y=element_blank())
+plot(P174Plot)
+P175Plot = ggplot(pkStats[pkStats$problem_id == 175,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +  scale_fill_discrete(name = "groupCond", labels = c("Control", "Exp"))+
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+  theme(legend.position = "none") + scale_x_discrete(labels = c("Control", "Hints"))+ 
+  theme(axis.title.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.title.y=element_blank(),
+        axis.ticks.y=element_blank())
+plot(P175Plot)
+figure = ggarrange(P172Plot, P173Plot, P174Plot, P175Plot,
+          labels = c("1A", "2A", "1B", "2B"),
+          ncol = 4, nrow = 1,
+          common.legend = TRUE,
+          font.label = list(size = 12, face = "bold", color ="blue"),
+          vjust = 1)
+annotate_figure(figure,
+                bottom = text_grob("Average number of attempts", color = "blue", face = "bold", size = 14)
+)
 
 # Not considering the interaction, there's a significant of PK
 anova(m1 <- lmer(nAttempts ~ exp + highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")

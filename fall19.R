@@ -123,6 +123,7 @@ byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),] #1731
 (length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE])))
 ##########################
 byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
+byStudentWTime$lnAttempts <- log(byStudentWTime$nAttempts)
 byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id <= 175)
 byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
 byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
@@ -210,38 +211,32 @@ condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWT
 #scatter plot
 ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=rankAttempts, x=pGood, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm) + facet_wrap(~ problem_id, scales = "free")
 ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=log(nAttempts), x=pGood, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm) + facet_wrap(~ problem_id, scales = "free")
-ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, pGood, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
 
 ## students almost always got the problem correct \textit{eventually} (96.77\% of the time)
 (mean(byStudentWTime$pCorrect > 0))
+
+
 # RQ1 ======
 (length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE]))) # 112
 (length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE]))) # 118
+
 # Table 1 in the paper
+# Number of attempts
 condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
-# length of students who completed this problem eventually
-(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==172 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
-(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==172 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
-
 condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
-(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==173 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
-(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==173 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
-
-
 condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
-(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==174 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
-(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==174 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
-
 condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
-(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==175 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
-(length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==175 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
 
+# Total number in each condition
+ddply(byStudentWTime[byStudentWTime$problem_id < 176,], "early", summarize, n=length(unique(user_id)))
 timeStats <- ddply(byStudentWTime, c("problem_id", "early"), summarize, 
                    nCorrect=sum(pCorrect > 0),
                    mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
                    mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
                    pFirstCorrect=mean(timeRevising==0))
-timeStats
+# Number of students who completed problems correctly eventually
+timeStats[1:8,1:3]
+
 # End RQ1 ======
 
 ggplot(timeStats, aes(x=problem_id, y=mTime, color=early)) + 
@@ -272,6 +267,10 @@ noIntervention <- byStudentWTime$user_id[byStudentWTime$problem_id == 172 & bySt
 
 
 # RQ2 ======
+cors <- ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, pGood, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
+cors$pcode <- symnum(cors$corP, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1), symbols = c("***", "**", "*", ".", " "))
+cors
+
 ggplot(byStudentWTime[byStudentWTime$problem_id < 176,], aes(x=early, y=rankAttempts, color=highPK)) +#, linetype=highPK)) + 
   geom_boxplot(position = position_dodge(width=0.3), width=0.2) +
   stat_summary(geom = "point", fun.y = "mean", size = 3, shape = 24, position=position_dodge(width=0.3)) +
@@ -387,10 +386,10 @@ condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=!byStu
 
 # End RQ2 =====
 
-Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 172,]), type="III")
-Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 173,]), type="III")
-Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 174,]), type="III")
-Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 175,]), type="III")
+Anova(lm(log(nAttempts) ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 172,]), type="III")
+Anova(lm(log(nAttempts) ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 173,]), type="III")
+Anova(lm(log(nAttempts) ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 174,]), type="III")
+Anova(lm(log(nAttempts) ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 175,]), type="III")
 
 pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
 pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]

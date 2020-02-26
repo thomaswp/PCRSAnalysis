@@ -19,11 +19,6 @@ allAttempts <- allAttempts[allAttempts$user_id %in% consenters$student_id,]
 survey <- read.csv("data/survey.csv") # survey data can be linked to attempts data by : anonId and hashed_id
 
 
-
-attempts <- allAttempts[allAttempts$quest_id == 49,]
-### Length of students who attempted the 6 problems in the study: 248
-(length(unique(attempts$user_id)))
-
 allAttempts$timestamp <-as.POSIXct(allAttempts$timestamp, format="%Y-%m-%d %H:%M:%S")
 getTimeOfStudy = allAttempts[allAttempts$problem_id>=172 & allAttempts$problem_id<=179, ]
 getTimeOfStudy = getTimeOfStudy[order(getTimeOfStudy$timestamp), ] # The estimated time of the start of the study "2019-12-12 09:35:41 EST"
@@ -41,7 +36,9 @@ for (problemID in unique(allPriorAttempts$problem_id)) {
   }
 }
 
-priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
+# Old way of counting prior attempts
+# priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
+
 meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
 meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
 priorAttempts <- merge(priorAttempts, meanAttempts)
@@ -53,11 +50,16 @@ priorKnowledge$highPK <- priorKnowledge$mz < median(priorKnowledge$mz)
 table(priorKnowledge$highPK)
 priorKnowledge <- priorKnowledge[priorKnowledge$user_id %in% attempts$user_id,]
 priorKnowledge$pkRank <- rank(priorKnowledge$mz)
+
+attempts <- allAttempts[allAttempts$quest_id == 49,]
+### Length of students who attempted the 8 problems in the study: 248
+(length(unique(attempts$user_id)))
 attempts <- merge(attempts, priorKnowledge)
 
 ## just to verify
 #################
 priorAttempts <- priorAttempts[priorAttempts$user_id %in% attempts$user_id,]
+table(priorKnowledge$highPK)
 length(unique(priorAttempts$problem_id)) # There is 71 problems, but after excluding problem 55, they are 70
 priorAttempts2 <- ddply(priorAttempts, "user_id", summarize, nProblems = length(problem_id))
 summary(priorAttempts2$nProblems)
@@ -126,39 +128,17 @@ byStudentWTime$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[byStudentWTime$problem_
 #byStudentWTime$nAttempts <- pmin(byStudentWTime$nAttempts, 10)
 
 #### (ddply is not WORKING) Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
-attemptsOrder = ddply(byStudentWTime, ("user_id"), summarize, maxTime4Probs = pmax(byStudentWTime$timeStopped[byStudentWTime$problem_id<176]),
-                     minTime4Probs = pmin(byStudentWTime$timeStopped[(byStudentWTime$problem_id==175 | byStudentWTime$problem_id==176)]),
-                     isHighPK = first(highPK))
+attemptsOrder = ddply(byStudentWTime, ("user_id"), summarize, 
+                      maxTime4Probs = max(timeStopped[problem_id<176]),
+                      minTime4Probs = min(timeStarted[(problem_id==176 | problem_id==177)]),
+                      isHighPK = first(highPK), isEarly = first(early))
 
-attemptsOrder$isOrdered = ifelse(attemptsOrder$maxTime4Probs < attemptsOrder$minTime4Probs, FALSE, TRUE)
-
-#### Number of students in each condition who saw problems 176 or 177 before completing part one (172-175)
-byStudentWTime$minLast4Probs = 0
-byStudentWTime$maxFirst4Probs = 0
-usersLess176 = byStudentWTime[byStudentWTime$problem_id<176, ] 
-users176177 = byStudentWTime[byStudentWTime$problem_id==176 | byStudentWTime$problem_id==177, ] 
-for (user_id in unique(byStudentWTime$user_id)) {
-  if(user_id %in% usersLess176$user_id){
-    byStudentWTime$maxFirst4Probs[byStudentWTime$user_id==user_id]= max(byStudentWTime$timeStopped[byStudentWTime$problem_id<176 & byStudentWTime$user_id==user_id], na.rm = TRUE)
-  }
-  if(user_id %in% users176177$user_id){
-    byStudentWTime$minLast4Probs[byStudentWTime$user_id==user_id]= min(byStudentWTime$timeStopped[(byStudentWTime$problem_id==176 | byStudentWTime$problem_id==177) & byStudentWTime$user_id==user_id])
-  }
-}
-# Sanity check any student with 0 value in either maxFirst4Probs or minLast4Probs means that he/she did not attempt either any of the first 4 problems or the last 4 problems.
-# For example: These 2 students 13730 , 13553 were in the experimental condition and only did problem 176, or 176 and 177, so they have seen hints. I will remove them
-byStudentWTime$isOrdered = ifelse(byStudentWTime$maxFirst4Probs > byStudentWTime$minLast4Probs, FALSE, TRUE)
-# for those who did not do the first part, part 1 = 0 and part 2 is greater, so we need to remove them
-byStudentWTime$isOrdered = ifelse(byStudentWTime$maxFirst4Probs==0, FALSE, byStudentWTime$isOrdered)
-# also, those who only did part 1, their part 2 is 0, so they are treated as inOrdered, however I think they should be treated as ordered
-byStudentWTime$isOrdered = ifelse(byStudentWTime$minLast4Probs==0, TRUE, byStudentWTime$isOrdered)
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE])) # 13 students should be filtered out
-
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$highPK==TRUE])) # 5/13 from the highPK, 8/13 from lowPK
-length(unique(byStudentWTime$user_id[byStudentWTime$isOrdered==FALSE & byStudentWTime$early==FALSE])) # 6/13 from the exp and 7/14 from control
+attemptsOrder$isOrdered <- ifNA(attemptsOrder$maxTime4Probs < attemptsOrder$minTime4Probs, T)
+table(attemptsOrder$isOrdered, attemptsOrder$isHighPK)
+table(attemptsOrder$isOrdered, attemptsOrder$isEarly)
 
 #Remove those 13 students
-byStudentWTime = byStudentWTime[byStudentWTime$isOrdered == TRUE, ]
+# byStudentWTime = byStudentWTime[byStudentWTime$isOrdered == TRUE, ]
 
 ### check students who did problem 175 before 173, and those who did problem 174 before 172
 byStudentWTime$isAssessmentFirst =  FALSE
@@ -1176,10 +1156,11 @@ estimateParameters <- function(attempts, problem_id){
 
 estimatePriorAttempts <- function(attempts, problem_id){
   problemAttempts <- attempts[attempts$problem_id == problem_id,]
+  problemAttempts <- problemAttempts[order(problemAttempts$timestamp), ]
+  
   timePerProblem <- NA
   for (user_id in unique(problemAttempts$user_id)) {
     userAttempts <- problemAttempts[problemAttempts$user_id == user_id,]
-    userAttempts <- userAttempts[order(userAttempts$timestamp), ]
     # Find the last attempt before they've gotten it right
     lastValidAttempt <- min(c(which(userAttempts$correct), nrow(userAttempts)))
     # Keep only through that attempt (i.e. ignore attempts after correct)

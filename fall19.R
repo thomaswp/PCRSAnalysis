@@ -267,7 +267,7 @@ noIntervention <- byStudentWTime$user_id[byStudentWTime$problem_id == 172 & bySt
 
 
 # RQ2 ======
-cors <- ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, pGood, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
+cors <- ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, pGood, method="spearman"), corP=cor.test(nAttempts, pGood, method="spearman")$p.value)
 cors$pcode <- symnum(cors$corP, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1), symbols = c("***", "**", "*", ".", " "))
 cors
 

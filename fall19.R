@@ -40,37 +40,37 @@ for (problemID in unique(allPriorAttempts$problem_id)) {
 attempts <- allAttempts[allAttempts$quest_id == 49,]
 ### Length of students who attempted the 8 problems in the study: 248
 (length(unique(attempts$user_id)))
-attempts <- merge(attempts, priorKnowledge)
 
 # Old way of counting prior attempts
 # priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
 
 meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts), medAttempts = median(nAttempts))
 meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
-priorAttempts <- merge(priorAttempts, meanAttempts)
-priorAttempts$goodPerf <- priorAttempts$nAttempts <= priorAttempts$medAttempts
-priorAttempts$zAttempts <- (priorAttempts$nAttempts - priorAttempts$mAttempts) / priorAttempts$sdAttempt
-priorKnowledge <- ddply(priorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts), pGood=mean(goodPerf))
+mergedPriorAttempts <- merge(priorAttempts, meanAttempts)
+mergedPriorAttempts$goodPerf <- mergedPriorAttempts$nAttempts <= mergedPriorAttempts$medAttempts
+mergedPriorAttempts$zAttempts <- (mergedPriorAttempts$nAttempts - mergedPriorAttempts$mAttempts) / mergedPriorAttempts$sdAttempt
+priorKnowledge <- ddply(mergedPriorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts), pGood=mean(goodPerf))
 mean(priorKnowledge$mz)
 mean(priorKnowledge$sdz)
-priorKnowledge$oldOighPK <- priorKnowledge$mz < median(priorKnowledge$mz)
+priorKnowledge$oldHighPK <- priorKnowledge$mz < median(priorKnowledge$mz)
 priorKnowledge$highPK <- priorKnowledge$pGood > median(priorKnowledge$pGood)
 table(priorKnowledge$highPK)
 priorKnowledge <- priorKnowledge[priorKnowledge$user_id %in% attempts$user_id,]
 priorKnowledge$pkRank <- rank(priorKnowledge$pGood)
-table(priorKnowledge$highPK, priorKnowledge$oldOighPK)
+table(priorKnowledge$highPK, priorKnowledge$oldHighPK)
 
 ## just to verify
 #################
-priorAttempts <- priorAttempts[priorAttempts$user_id %in% attempts$user_id,]
+mergedPriorAttempts <- mergedPriorAttempts[mergedPriorAttempts$user_id %in% attempts$user_id,]
 table(priorKnowledge$highPK)
-length(unique(priorAttempts$problem_id)) # There is 71 problems, but after excluding problem 55, they are 70
-priorAttempts2 <- ddply(priorAttempts, "user_id", summarize, nProblems = length(problem_id))
+length(unique(mergedPriorAttempts$problem_id)) # There is 71 problems, but after excluding problem 55, they are 70
+priorAttempts2 <- ddply(mergedPriorAttempts, "user_id", summarize, nProblems = length(problem_id))
 summary(priorAttempts2$nProblems)
 hist(priorAttempts2$nProblems)
 
 
 #if feedback = null this means they were not assigned to a condition
+attempts <- merge(attempts, priorKnowledge)
 attempts$had_feedback <- attempts$feedback_text != ""
 attempts$had_hints <- ifelse(attempts$had_feedback, grepl("'showHints': True", attempts$feedback_text, fixed=T), NA)
 attempts$reverse <- ifelse(attempts$had_feedback, grepl("'reversedShow': True", attempts$feedback_text, fixed=T), NA)
@@ -217,15 +217,15 @@ ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=log(nAttempts), x=p
 
 
 # RQ1 ======
-(length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE]))) # 112
-(length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE]))) # 118
+(length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE & byStudentWTime$problem_id < 176]))) # 112
+(length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE & byStudentWTime$problem_id < 176]))) # 118
 
 # Table 1 in the paper
 # Number of attempts
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
-condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
+condCompare(byStudentWTime$lnAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
+condCompare(byStudentWTime$lnAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
+condCompare(byStudentWTime$lnAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
+condCompare(byStudentWTime$lnAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
 
 # Total number in each condition
 ddply(byStudentWTime[byStudentWTime$problem_id < 176,], "early", summarize, n=length(unique(user_id)))
@@ -271,14 +271,6 @@ cors <- ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAt
 cors$pcode <- symnum(cors$corP, corr = FALSE, na = FALSE, cutpoints = c(0, 0.001, 0.01, 0.05, 0.1, 1), symbols = c("***", "**", "*", ".", " "))
 cors
 
-ggplot(byStudentWTime[byStudentWTime$problem_id < 176,], aes(x=early, y=rankAttempts, color=highPK)) +#, linetype=highPK)) + 
-  geom_boxplot(position = position_dodge(width=0.3), width=0.2) +
-  stat_summary(geom = "point", fun.y = "mean", size = 3, shape = 24, position=position_dodge(width=0.3)) +
-  #geom_line(position=position_dodge(width=0.2)) + 
-  #geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
-  facet_wrap(~ problem_id, scales = "free", ncol=2) +
-  theme_bw()
-
 pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
                  n=length(problem_id),
                  mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
@@ -290,10 +282,6 @@ pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
                  pFirstCorrect=mean(firstCorrect),
                  seFirstCorrect = se.prop(pFirstCorrect, n))
 
-ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=medAttempts, linetype=highPK, group=highPK)) +
-  geom_line(position=position_dodge(width=0.2)) + 
-  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=medAttempts-iqrAttempts, ymax=medAttempts+iqrAttempts)) +
-  facet_wrap(~ problem_id,scales = "free", ncol=2) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints")) 
 ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mRAttempts, linetype=highPK, group=highPK)) +
   geom_line(position=position_dodge(width=0.2)) + 
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mRAttempts-seRAttempts, ymax=mRAttempts+seRAttempts)) +
@@ -394,6 +382,15 @@ Anova(lm(log(nAttempts) ~ exp * highPK, data=byStudentWTime[byStudentWTime$probl
 pkStats$isAssessment <- c(F, F, T, T, F, F, T, T)[pkStats$problem_id - 172 + 1]
 pkStats$problemGroup <- c(0, 1, 0, 1, 2, 3, 2, 3)[pkStats$problem_id - 172 + 1]
 pkStats$exp <- pkStats$early == (pkStats$problem_id <= 175)
+
+
+ggplot(byStudentWTime[byStudentWTime$problem_id < 176,], aes(x=early, y=rankAttempts, color=highPK)) +#, linetype=highPK)) + 
+  geom_boxplot(position = position_dodge(width=0.3), width=0.2) +
+  stat_summary(geom = "point", fun.y = "mean", size = 3, shape = 24, position=position_dodge(width=0.3)) +
+  #geom_line(position=position_dodge(width=0.2)) + 
+  #geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+  facet_wrap(~ problem_id, scales = "free", ncol=2) +
+  theme_bw()
 
 ggplot(pkStats, aes(x=early, y=mLnTime, linetype=highPK, group=highPK)) + 
    geom_line(position=position_dodge(width=0.2)) + 

@@ -141,7 +141,7 @@ attemptsOrder$isOrdered <- ifNA(attemptsOrder$maxTime4Probs < attemptsOrder$minT
 table(attemptsOrder$isOrdered, attemptsOrder$isHighPK)
 table(attemptsOrder$isOrdered, attemptsOrder$isEarly)
 
-#Remove those 13 students
+# Don't remove the students - just report it instead
 # byStudentWTime = byStudentWTime[byStudentWTime$isOrdered == TRUE, ]
 
 ### check students who did problem 175 before 173, and those who did problem 174 before 172
@@ -286,6 +286,7 @@ pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
                  mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
                  mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
                  mRAttempts=mean(rankAttempts), seRAttempts=se(rankAttempts),
+                 mLnAttempts=mean(log(nAttempts)), seLnAttempts=se(log(nAttempts)),
                  medAttempts=median(nAttempts), iqrAttempts=IQR(nAttempts),
                  pFirstCorrect=mean(firstCorrect),
                  seFirstCorrect = se.prop(pFirstCorrect, n))
@@ -298,7 +299,10 @@ ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mRAttempts, linetype=h
   geom_line(position=position_dodge(width=0.2)) + 
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mRAttempts-seRAttempts, ymax=mRAttempts+seRAttempts)) +
   facet_wrap(~ problem_id,scales = "free", ncol=2) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints"))
-
+ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mLnAttempts, linetype=highPK, group=highPK)) +
+  geom_line(position=position_dodge(width=0.2)) + 
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mLnAttempts-seLnAttempts, ymax=mLnAttempts+seLnAttempts)) +
+  facet_wrap(~ problem_id,scales = "free", ncol=2) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints"))
 
 pkStats$Prior_Knowledge = ifelse(pkStats$highPK==TRUE, "High", "Low")
 ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=Prior_Knowledge, group=Prior_Knowledge))+ scale_fill_discrete(name = "Prior Knowledge", labels = c("Low", "High")) +
@@ -365,13 +369,16 @@ anova(m2 <- lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data
 anova(m1, m2)
 # Residuals aren't anywhere near normal
 qqnorm(residuals(m2))
+shapiro.test(residuals(m2))
 
 anova(m3 <- lmer(rankAttempts ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
 # More balanced, but still not normal
 qqnorm(residuals(m3))
+shapiro.test(residuals(m3))
 
-anova(m4 <- lmer(log(nAttempts) ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
+anova(m4 <- lmer(log(nAttempts) ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
 qqnorm(residuals(m4))
+shapiro.test(residuals(m4))
 
 # Discussion
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]

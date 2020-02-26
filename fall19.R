@@ -18,8 +18,6 @@ allAttempts <- read.csv("data/pyandexpt.csv")
 allAttempts <- allAttempts[allAttempts$user_id %in% consenters$student_id,]
 survey <- read.csv("data/survey.csv") # survey data can be linked to attempts data by : anonId and hashed_id
 
-
-
 attempts <- allAttempts[allAttempts$quest_id == 49,]
 ### Length of students who attempted the 6 problems in the study: 248
 (length(unique(attempts$user_id)))
@@ -41,7 +39,7 @@ for (problemID in unique(allPriorAttempts$problem_id)) {
   }
 }
 
-priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
+#priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
 meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
 meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
 priorAttempts <- merge(priorAttempts, meanAttempts)
@@ -233,7 +231,7 @@ ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, 
 (mean(byStudentWTime$pCorrect > 0))
 # RQ1 ======
 (length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE]))) # 112
-(length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE]))) # 118
+(length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE]))) # 117
 # Table 1 in the paper
 condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
 # length of students who completed this problem eventually
@@ -298,16 +296,10 @@ pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
                  seFirstCorrect = se.prop(pFirstCorrect, n))
 
 pkStats$Prior_Knowledge = ifelse(pkStats$highPK==TRUE, "High", "Low")
-ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=Prior_Knowledge, group=Prior_Knowledge))+ scale_fill_discrete(name = "Prior Knowledge", labels = c("Low", "High")) +
-  geom_line(position=position_dodge(width=0.2)) + 
-  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
-  facet_wrap(~ problem_id,scales = "free", ncol=2) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints")) 
-
-P172Plot = ggplot(pkStats, aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) +  geom_line(position=position_dodge(width=0.2)) +ylab("Average number of attempts")+ geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) + theme(legend.position = "none")
-P172Plot = ggplot(pkStats[pkStats$problem_id == 172,], aes(x=early, y=mAttempts, linetype=Prior_Knowledge, group=Prior_Knowledge))+ 
-  scale_x_discrete(labels = c("Control", "Hints"))+
-  geom_line(position=position_dodge(width=0.2)) + 
-  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints")) 
+#ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=Prior_Knowledge, group=Prior_Knowledge))+ scale_fill_discrete(name = "Prior Knowledge", labels = c("Low", "High")) +
+#geom_line(position=position_dodge(width=0.2)) + 
+#geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+#facet_wrap(~ problem_id,scales = "free", ncol=2) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints")) 
 
 P172Plot = ggplot(pkStats[pkStats$problem_id == 172,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +  scale_x_discrete(labels = c("Control", "Hints"))+ 
@@ -317,7 +309,7 @@ P172Plot = ggplot(pkStats[pkStats$problem_id == 172,], aes(y=mAttempts, x=early,
       axis.title.y=element_blank(),
       axis.ticks.y=element_blank()
       )
-plot(P172Plot)
+#plot(P172Plot)
 P173Plot = ggplot(pkStats[pkStats$problem_id == 173,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
   theme(legend.position = "none") + scale_x_discrete(labels = c("Control", "Hints"))+ 
@@ -327,7 +319,7 @@ P173Plot = ggplot(pkStats[pkStats$problem_id == 173,], aes(y=mAttempts, x=early,
         axis.ticks.y=element_blank()
   )
 
-plot(P173Plot)
+#plot(P173Plot)
 P174Plot = ggplot(pkStats[pkStats$problem_id == 174,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
   theme(legend.position = "none") + scale_x_discrete(labels = c("Control", "Hints"))+ 
@@ -335,7 +327,8 @@ P174Plot = ggplot(pkStats[pkStats$problem_id == 174,], aes(y=mAttempts, x=early,
         axis.ticks.x=element_blank(),
         axis.title.y=element_blank(),
         axis.ticks.y=element_blank())
-plot(P174Plot)
+#plot(P174Plot)
+
 P175Plot = ggplot(pkStats[pkStats$problem_id == 175,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +  scale_fill_discrete(name = "groupCond", labels = c("Control", "Exp"))+
   geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
   theme(legend.position = "none") + scale_x_discrete(labels = c("Control", "Hints"))+ 
@@ -343,13 +336,15 @@ P175Plot = ggplot(pkStats[pkStats$problem_id == 175,], aes(y=mAttempts, x=early,
         axis.ticks.x=element_blank(),
         axis.title.y=element_blank(),
         axis.ticks.y=element_blank())
-plot(P175Plot)
+#plot(P175Plot)
+
 figure = ggarrange(P172Plot, P173Plot, P174Plot, P175Plot,
           labels = c("1A", "2A", "1B", "2B"),
           ncol = 4, nrow = 1,
           common.legend = TRUE,
           font.label = list(size = 12, face = "bold", color ="blue"),
           vjust = 1)
+
 annotate_figure(figure,
                 bottom = text_grob("Average number of attempts", color = "blue", face = "bold", size = 14)
 )
@@ -538,19 +533,21 @@ studentProblems = ddply(byStudentWTime[byStudentWTime$problem_id<175, ], c("user
 length(studentProblems$user_id[studentProblems$nProblems<8]) ## 28.8%
 
 ### prepare a small dataframe where students have the same code submitted, and it is incorrect
-caseStudyDF = attempts[attempts$problem_id==172 & attempts$bestScore==FALSE & attempts$score<4, ]
+caseStudyDF = attempts[attempts$problem_id==172 & attempts$score<4 & attempts$early==TRUE, ]
 #caseStudyDF <- caseStudyDF[!is.na(caseStudyDF$early),] 
 caseStudyDF2= ddply(caseStudyDF, c("user_id", "submission"), summarise, nDuplicates=length(user_id), score = first(score), early = first(early), highPK = first(highPK))
 caseStudyDF2 = caseStudyDF2[order(caseStudyDF2$user_id), ]
-caseStudyDF2_HPK = caseStudyDF2[caseStudyDF2$highPK==TRUE, ]
-caseStudyDF2_LPK = caseStudyDF2[caseStudyDF2$highPK==FALSE, ]
-write.csv(caseStudyDF2_LPK, "caseStudyDF2_LPK.csv")
-write.csv(caseStudyDF2_HPK, "caseStudyDF2_HPK.csv")
+caseStudyDF2_HPK = caseStudyDF2[caseStudyDF2$highPK==TRUE & caseStudyDF2$early==TRUE, ]
+length(unique(caseStudyDF2_HPK$user_id)) # 24
+caseStudyDF2_LPK = caseStudyDF2[caseStudyDF2$highPK==FALSE & caseStudyDF2$early==TRUE, ]
+length(unique(caseStudyDF2_LPK$user_id)) # 32
+write.csv(caseStudyDF2_LPK, "caseStudyDF2_LPK_2.csv")
+write.csv(caseStudyDF2_HPK, "caseStudyDF2_HPK_2.csv")
 write.csv(caseStudyDF2, "caseStudyDF2.csv")
 # I found 2 cases with the same incorrect code
-case1 = attempts[attempts$user_id==12899, ]
+case1 = attempts[attempts$user_id==13186, ]
 case1 = case1[, c("user_id", "problem_id", "early", "highPK", "submission", "feedback_text", "score", "max_score","timestamp")]
-case2 = attempts[attempts$user_id==13004, ]
+case2 = attempts[attempts$user_id==12899, ]
 case2 = case2[, c("user_id", "problem_id", "early", "highPK", "submission", "feedback_text", "score", "max_score","timestamp")]
 
 case1 = case1[order(case1$timestamp), ]
@@ -566,7 +563,8 @@ for (i in 2:length(case1)) {
 cases = cases[, c("user_id", "problem_id", "early", "highPK", "submission", "feedback_text", "score", "max_score","timestamp")]
 
 test2 = ddply(cases, c("user_id", "problem_id"), summarise, n = length(user_id))
-write.csv(cases, "cases.csv")
+write.csv(case1, "case1.csv")
+write.csv(case2, "case2.csv")
 
 #may need to make sure that students in the analysis are those who did all the 8 problems.
 studentsW8Problems = ddply(byStudentWTime, c("user_id"), summarise, nProblems=length(unique(problem_id)), early = first(early), highPK = first(highPK))
@@ -937,13 +935,14 @@ ggarrange(pair1, pair2, pair3, pair4,
 ########################################
 # 1- filter data
 surveyFiltered = survey[survey$anonid %in% lm_byStudent$anonID, ]
-length(unique(lm_byStudent$user_id)) # 243
+length(unique(lm_byStudent$user_id)) # 243 (after filtering: 229)
 surveyFiltered$anonID = surveyFiltered$anonid
 lm_byStudent_WSurvey = lm_byStudent[lm_byStudent$anonID %in% surveyFiltered$anonid, ]
 lm_byStudent_WSurvey = merge(lm_byStudent_WSurvey, surveyFiltered, by = "anonID")
-length(unique(lm_byStudent_WSurvey$user_id)) # 181
-pretty_survey = lm_byStudent_WSurvey[, c("user_id", "early", "highPK", "nAttempts", "Q138", "Q140", "Q142", "Q144_4", "Q144_5", "Q146_4", "Q146_5", "Q129")]
-pretty_survey_summarized = ddply(pretty_survey, c("user_id"), summarise, early = first(early), 
+lm_byStudent_WSurvey$start
+length(unique(lm_byStudent_WSurvey$user_id)) # 181 (after filtering 170)
+pretty_survey = lm_byStudent_WSurvey[, c("user_id", "StartDate", "early", "highPK", "nAttempts", "Q138", "Q140", "Q142", "Q144_4", "Q144_5", "Q146_4", "Q146_5", "Q129")]
+pretty_survey_summarized = ddply(pretty_survey, c("user_id"), summarise, startTime = first(StartDate), early = first(early), 
                       highPK = first(highPK),
                       mAttempts = mean(nAttempts),
                       Q138 = first(Q138),
@@ -954,7 +953,11 @@ pretty_survey_summarized = ddply(pretty_survey, c("user_id"), summarise, early =
                       Q146_4 = first(Q146_4),
                       Q146_5 = first(Q146_5),
                       Q129 = first(Q129))
+
+
 pretty_survey_summarized = pretty_survey_summarized[order(pretty_survey_summarized$highPK), ]
+pretty_survey_summarized = pretty_survey_summarized[order(pretty_survey_summarized$startTime), ] # 12/16/2019 1:06
+(maxStoppedAttempt = max(byStudentWTime$timeStopped))
 write.csv(pretty_survey_summarized, "pretty_survey_summarized.csv")
 #Q186: Rate the amount of prior programming experience from 1 to 9
 # From the results below, looks like it has no interaction effect

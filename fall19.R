@@ -36,25 +36,29 @@ for (problemID in unique(allPriorAttempts$problem_id)) {
   }
 }
 
-# Old way of counting prior attempts
-# priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
-
-meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
-meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
-priorAttempts <- merge(priorAttempts, meanAttempts)
-priorAttempts$zAttempts <- (priorAttempts$nAttempts - priorAttempts$mAttempts) / priorAttempts$sdAttempt
-priorKnowledge <- ddply(priorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts))
-mean(priorKnowledge$mz)
-mean(priorKnowledge$sdz)
-priorKnowledge$highPK <- priorKnowledge$mz < median(priorKnowledge$mz)
-table(priorKnowledge$highPK)
-priorKnowledge <- priorKnowledge[priorKnowledge$user_id %in% attempts$user_id,]
-priorKnowledge$pkRank <- rank(priorKnowledge$mz)
 
 attempts <- allAttempts[allAttempts$quest_id == 49,]
 ### Length of students who attempted the 8 problems in the study: 248
 (length(unique(attempts$user_id)))
 attempts <- merge(attempts, priorKnowledge)
+
+# Old way of counting prior attempts
+# priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
+
+meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts), medAttempts = median(nAttempts))
+meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
+priorAttempts <- merge(priorAttempts, meanAttempts)
+priorAttempts$goodPerf <- priorAttempts$nAttempts <= priorAttempts$medAttempts
+priorAttempts$zAttempts <- (priorAttempts$nAttempts - priorAttempts$mAttempts) / priorAttempts$sdAttempt
+priorKnowledge <- ddply(priorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts), pGood=mean(goodPerf))
+mean(priorKnowledge$mz)
+mean(priorKnowledge$sdz)
+priorKnowledge$oldOighPK <- priorKnowledge$mz < median(priorKnowledge$mz)
+priorKnowledge$highPK <- priorKnowledge$pGood > median(priorKnowledge$pGood)
+table(priorKnowledge$highPK)
+priorKnowledge <- priorKnowledge[priorKnowledge$user_id %in% attempts$user_id,]
+priorKnowledge$pkRank <- rank(priorKnowledge$pGood)
+table(priorKnowledge$highPK, priorKnowledge$oldOighPK)
 
 ## just to verify
 #################
@@ -183,7 +187,7 @@ ggplot(byStudent172, aes(y=mz,x=early)) + geom_boxplot() + facet_wrap(~ highPK)
 condCompare(byStudent172$mz, byStudent172$early, filter=!byStudent172$highPK)
 # No overall difference between conditions in % first correct on first problem
 chisq.test(byStudent172$firstCorrect, byStudent172$early)
-# No significant differences in firstCorrect between the two groups (though its darn close...)
+# No significant differences in firstCorrect between the two groups (though its darn close for lowPK students...)
 chisq.test(byStudent172$firstCorrect[byStudent172$highPK], byStudent172$early[byStudent172$highPK])
 chisq.test(byStudent172$firstCorrect[!byStudent172$highPK], byStudent172$early[!byStudent172$highPK]) # marginal significance between lowPK with and without hints
 
@@ -204,10 +208,9 @@ condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWT
 
 
 #scatter plot
-ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=pmin(nAttempts, 5), x=mz, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm) + facet_wrap(~ problem_id, scales = "free")
-ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=nAttempts, x=pkRank, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm) + facet_wrap(~ problem_id, scales = "free")
-ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=pmin(nAttempts, 5), x=pkRank, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm, level=0.683) + facet_wrap(~ problem_id, scales = "free")
-ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, mz, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
+ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=rankAttempts, x=pGood, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm) + facet_wrap(~ problem_id, scales = "free")
+ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=log(nAttempts), x=pGood, group=early, color=early)) + geom_point(size= 0.3) + geom_smooth(span=0.3, method=lm) + facet_wrap(~ problem_id, scales = "free")
+ddply(byStudentWTime, c("problem_id", "early"), summarize, corPK=cor(nAttempts, pGood, method="spearman"), corP=cor.test(nAttempts, mz, method="spearman")$p.value)
 
 ## students almost always got the problem correct \textit{eventually} (96.77\% of the time)
 (mean(byStudentWTime$pCorrect > 0))
@@ -269,13 +272,33 @@ noIntervention <- byStudentWTime$user_id[byStudentWTime$problem_id == 172 & bySt
 
 
 # RQ2 ======
+ggplot(byStudentWTime[byStudentWTime$problem_id < 176,], aes(x=early, y=rankAttempts, color=highPK)) +#, linetype=highPK)) + 
+  geom_boxplot(position = position_dodge(width=0.3), width=0.2) +
+  stat_summary(geom = "point", fun.y = "mean", size = 3, shape = 24, position=position_dodge(width=0.3)) +
+  #geom_line(position=position_dodge(width=0.2)) + 
+  #geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
+  facet_wrap(~ problem_id, scales = "free", ncol=2) +
+  theme_bw()
+
 pkStats <- ddply(byStudentWTime, c("problem_id", "early", "highPK"), summarize,
                  n=length(problem_id),
                  mTime=mean(timeRevising), medTime=median(timeRevising), seTime=se(timeRevising),
                  mLnTime=mean(log(timeRevising+1)), seLnTime=se(log(timeRevising+1)),
                  mAttempts=mean(nAttempts), seAttempts=se(nAttempts),
+                 mRAttempts=mean(rankAttempts), seRAttempts=se(rankAttempts),
+                 medAttempts=median(nAttempts), iqrAttempts=IQR(nAttempts),
                  pFirstCorrect=mean(firstCorrect),
                  seFirstCorrect = se.prop(pFirstCorrect, n))
+
+ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=medAttempts, linetype=highPK, group=highPK)) +
+  geom_line(position=position_dodge(width=0.2)) + 
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=medAttempts-iqrAttempts, ymax=medAttempts+iqrAttempts)) +
+  facet_wrap(~ problem_id,scales = "free", ncol=2) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints")) 
+ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mRAttempts, linetype=highPK, group=highPK)) +
+  geom_line(position=position_dodge(width=0.2)) + 
+  geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mRAttempts-seRAttempts, ymax=mRAttempts+seRAttempts)) +
+  facet_wrap(~ problem_id,scales = "free", ncol=2) + ylab("Average number of attempts") + xlab("") + scale_x_discrete(labels=c("no hints", "hints"))
+
 
 pkStats$Prior_Knowledge = ifelse(pkStats$highPK==TRUE, "High", "Low")
 ggplot(pkStats[pkStats$problem_id < 176,], aes(x=early, y=mAttempts, linetype=Prior_Knowledge, group=Prior_Knowledge))+ scale_fill_discrete(name = "Prior Knowledge", labels = c("Low", "High")) +
@@ -340,6 +363,15 @@ anova(m1 <- lmer(nAttempts ~ exp + highPK + problem_id_nom + (1 | user_id), data
 anova(m2 <- lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
 # But the interaction model is significantly better
 anova(m1, m2)
+# Residuals aren't anywhere near normal
+qqnorm(residuals(m2))
+
+anova(m3 <- lmer(rankAttempts ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
+# More balanced, but still not normal
+qqnorm(residuals(m3))
+
+anova(m4 <- lmer(log(nAttempts) ~ exp * highPK + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id < 176,]), type="III")
+qqnorm(residuals(m4))
 
 # Discussion
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
@@ -1151,6 +1183,7 @@ estimateParameters <- function(attempts, problem_id){
     ))
   }
   timePerProblem <- timePerProblem[-1,]
+  timePerProblem$rankAttempts <- rank(timePerProblem$nAttempts)
   return (timePerProblem)
 }
 

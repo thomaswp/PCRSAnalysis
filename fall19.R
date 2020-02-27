@@ -222,10 +222,10 @@ ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=log(nAttempts), x=p
 
 # Table 1 in the paper
 # Number of attempts
-condCompare(byStudentWTime$lnAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
-condCompare(byStudentWTime$lnAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
-condCompare(byStudentWTime$lnAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
-condCompare(byStudentWTime$lnAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 173)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 174)
+condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 175)
 
 # Total number in each condition
 ddply(byStudentWTime[byStudentWTime$problem_id < 176,], "early", summarize, n=length(unique(user_id)))
@@ -373,6 +373,11 @@ condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=byStud
 condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=!byStudent172$early)
 
 # End RQ2 =====
+
+# RQ3 ======
+fisher.test(matrix(c(1, 26, 8, 19), nrow=2))
+
+# End RQ3 ====
 
 Anova(lm(log(nAttempts) ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 172,]), type="III")
 Anova(lm(log(nAttempts) ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 173,]), type="III")

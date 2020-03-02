@@ -6,6 +6,7 @@ library(lmerTest)
 library(ggpubr)
 library(rbin)
 library(car)
+library(dunn.test)
 
 
 consenters <- read.csv("data/consenters.csv")
@@ -220,6 +221,9 @@ ggplot(byStudentWTime[byStudentWTime$problem_id<176,], aes(y=log(nAttempts), x=p
 (length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE & byStudentWTime$problem_id < 176]))) # 112
 (length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE & byStudentWTime$problem_id < 176]))) # 118
 
+(length(unique(byStudentWTime$user_id[byStudentWTime$highPK==TRUE & byStudentWTime$problem_id < 176]))) # 112
+(length(unique(byStudentWTime$user_id[byStudentWTime$highPK==FALSE & byStudentWTime$problem_id < 176]))) # 118
+
 # Table 1 in the paper
 # Number of attempts
 condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 172)
@@ -371,6 +375,19 @@ shapiro.test(residuals(m4))
 byStudent172 <- byStudentWTime[byStudentWTime$problem_id == 172,]
 condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=byStudent172$early)
 condCompare((byStudent172$pCorrect == 1) + 0, byStudent172$highPK, filter=!byStudent172$early)
+
+# If you actually wanted to do pairwise tests (not currently included but maybe CRC)
+byStudentWTime$group <- paste0(
+  ifelse(byStudentWTime$highPK, "HPK", "LPK"), "_", 
+  ifelse(byStudentWTime$early, "Hint", "Ctrl"))
+dunn.test(byStudentWTime[byStudentWTime$problem_id == 172,]$nAttempts, 
+          g=byStudentWTime[byStudentWTime$problem_id == 172,]$group, method="bh")
+dunn.test(byStudentWTime[byStudentWTime$problem_id == 173,]$nAttempts, 
+          g=byStudentWTime[byStudentWTime$problem_id == 173,]$group, method="bh")
+dunn.test(byStudentWTime[byStudentWTime$problem_id == 174,]$nAttempts, 
+          g=byStudentWTime[byStudentWTime$problem_id == 174,]$group, method="bh")
+dunn.test(byStudentWTime[byStudentWTime$problem_id == 175,]$nAttempts, 
+          g=byStudentWTime[byStudentWTime$problem_id == 175,]$group, method="bh")
 
 # End RQ2 =====
 

@@ -37,7 +37,6 @@ for (problemID in unique(allPriorAttempts$problem_id)) {
   }
 }
 
-
 attempts <- allAttempts[allAttempts$quest_id == 49,]
 ### Length of students who attempted the 8 problems in the study: 248
 (length(unique(attempts$user_id)))
@@ -45,7 +44,7 @@ attempts <- allAttempts[allAttempts$quest_id == 49,]
 # Old way of counting prior attempts
 # priorAttempts <- ddply(allPriorAttempts, c("user_id", "problem_id"), summarize, nAttempts=length(user_id)) # 25629
 
-meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts), medAttempts = median(nAttempts))
+meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts), medAttempts = median(nAttempts), pFirst=mean(nAttempts==1))
 meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
 mergedPriorAttempts <- merge(priorAttempts, meanAttempts)
 mergedPriorAttempts$goodPerf <- mergedPriorAttempts$nAttempts <= mergedPriorAttempts$medAttempts

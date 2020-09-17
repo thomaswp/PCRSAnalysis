@@ -51,9 +51,10 @@ GetData <- function(){
 dataAnalysis <- function(){
   length(unique(allAttempts$problem_id)) # 117 unique problems.
   
-  # just get attempts of experiment problems 
-  attempts = allAttempts[allAttempts$problem_id==39 | allAttempts$problem_id==56 | allAttempts$problem_id==59
-                         | allAttempts$problem_id==62 | allAttempts$problem_id==64 | allAttempts$problem_id==180, ]
+  # just get attempts of experiment problems
+  # Note: Full Name Lookup was not included
+  attempts = allAttempts[allAttempts$problem_id==39 | allAttempts$problem_id==59 | allAttempts$problem_id==87 | allAttempts$problem_id==180
+                         | allAttempts$problem_id==64 | allAttempts$problem_id==56 | allAttempts$problem_id==62 | allAttempts$problem_id==62, ]
   
   
   (length(unique(attempts$problem_id))) # 6 problems
@@ -131,8 +132,7 @@ dataAnalysis <- function(){
   prettyAttempts = attempts[, c("user_id", "timestamp", "score", "problem_id", "name.2", "feedback_text",
                                 "max_score", "mz", "highPK", "had_feedback", "had_hints", "reverse", "early",
                                 "correct", "showMissing", "showSelfExplain")]
-  prettyAttempts = prettyAttempts[order(prettyAttempts$problem_id), ]
-  prettyAttempts = prettyAttempts[order(prettyAttempts$user_id), ]
+  prettyAttempts = prettyAttempts[order(prettyAttempts$problem_id, prettyAttempts$user_id), ]
   #looks like there are 2 students who were both in the early and late groups
   write.csv(prettyAttempts, "prettyAttempts.csv")
   prettyAttempts2 = prettyAttempts[!is.na(prettyAttempts$early),]
@@ -146,14 +146,15 @@ dataAnalysis <- function(){
   #39 (1A with hints Early), 56 (hints for late), 59 (with hints, Early), 
   #62 (2nd assessment), 64 (hints for late), 180 (1B, first assessment)
   
-  problem1_attempts <- estimateParameters(attempts, 39) # Week 7
-  problem2_attempts <- estimateParameters(attempts, 56)  # Week 8
-  problem3_attempts <- estimateParameters(attempts, 59) # Week 7
-  problem4_attempts <- estimateParameters(attempts, 62) # -- not mentioned
-  problem5_attempts <- estimateParameters(attempts, 64) #Week 8
-  problem6_attempts <- estimateParameters(attempts, 180) # --
+  problem1_attempts <- estimateParameters(attempts, 39)  # Week 7 Hints Early
+  problem3_attempts <- estimateParameters(attempts, 59)  # Week 7 Hints Early
+  problem7_attempts <- estimateParameters(attempts, 87)  # Week 7 Assessment-ish
+  problem6_attempts <- estimateParameters(attempts, 180) # Week 7 Assessment
+  problem5_attempts <- estimateParameters(attempts, 64)  # Week 8 Hints Late
+  problem2_attempts <- estimateParameters(attempts, 56)  # Week 8 Hints Late
+  problem4_attempts <- estimateParameters(attempts, 62)  # Week 7 Assessment-ish
   
-  attemptsTime = rbind(problem1_attempts, problem2_attempts, problem3_attempts, problem4_attempts, problem5_attempts, problem6_attempts)
+  attemptsTime = rbind(problem1_attempts, problem2_attempts, problem3_attempts, problem4_attempts, problem5_attempts, problem6_attempts, problem7_attempts)
   length(unique(attemptsTime$user_id))
   attemptsTime <- merge(attemptsTime, priorKnowledge)
   
@@ -179,12 +180,14 @@ dataAnalysis <- function(){
   (length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE])))
   ##########################
   byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
-  byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id == 39 | byStudentWTime$problem_id == 59)
+  byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id == 39 | byStudentWTime$problem_id == 59 | byStudentWTime$problem_id == 87 | byStudentWTime$problem_id == 180)
   byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
   byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
-  byStudentWTime$isAssessment = ifelse(byStudentWTime$problem_id==62 | byStudentWTime$problem_id==180, TRUE, FALSE)
-  byStudentWTime$week = ifelse(byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59, 0, 1)
-  byStudentWTime$week = ifelse(byStudentWTime$problem_id==62 | byStudentWTime$problem_id==180, 2, byStudentWTime$week)
+  byStudentWTime$isAssessment = ifelse(byStudentWTime$problem_id==62 | byStudentWTime$problem_id==87 | byStudentWTime$problem_id==180, TRUE, FALSE)
+  byStudentWTime$week = ifelse(byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59 | byStudentWTime$problem_id==87 | byStudentWTime$problem_id==180, 0, 1)
+  # byStudentWTime$week = ifelse(byStudentWTime$problem_id==62 | byStudentWTime$problem_id==180, 2, byStudentWTime$week)
+  byStudentWTime$meanAttemptTime <- byStudentWTime$timeRevising / byStudentWTime$nAttempts
+  
   
   #the number of attempts correlates strongly (and significant) with the total \textit{time} a student spent on the problem
   cor.test(byStudentWTime$nAttempts, byStudentWTime$timeRevising, method = "spearman")
@@ -217,25 +220,77 @@ dataAnalysis <- function(){
   
   byStudentWTime$highPK1 = ifelse(byStudentWTime$highPK==TRUE, 1, 0)
   byStudentWTime$early1 = ifelse(byStudentWTime$early==TRUE, 1, 0)
+  byStudentWTime$exp1 = ifelse(byStudentWTime$exp==TRUE, 1, 0)
   an = aov(nAttempts ~ highPK1 + early1 + highPK1 * early1 , data=byStudentWTime[byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59,])
   summary(an)
   summary(lmer(nAttempts ~ highPK1 + early1 + highPK1 * early1  + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59,]))
   
-  byStudentWTime$problem_name = " "
-  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==39, "39 - 1 Practice", byStudentWTime$problem_name)
-  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==59, "59 - 2 Practice", byStudentWTime$problem_name)
-  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==180, "180 - 1 Assessment", byStudentWTime$problem_name)
-  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==64, "64 - 3 Practice", byStudentWTime$problem_name)
-  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==56, "56 - 4 Practice", byStudentWTime$problem_name)
-  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==62, "62 - 2 Assessment", byStudentWTime$problem_name)
-  byStudentWTime$problem_name <- factor(byStudentWTime$problem_name, levels = c("39 - 1 Practice","59 - 2 Practice", "180 - 1 Assessment", "64 - 3 Practice", "56 - 4 Practice", "62 - 2 Assessment"))
+  # Overall, students with hints spent more time revising and made more attemtps, but not significant
+  summary(lmer(timeRevising ~ exp1  + problem_id_nom + (1 | user_id), data=byStudentWTime))
+  summary(lmer(nAttempts ~ exp1  + problem_id_nom  + (1 | user_id), data=byStudentWTime))
   
-  ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + scale_x_discrete(labels = c("Late", "Early")) + facet_wrap(~ problem_name)
+  # Holds for practice problems
+  summary(lmer(timeRevising ~ exp1  + problem_id_nom + (1 | user_id), data=byStudentWTime[!byStudentWTime$isAssessment,]))
+  summary(lmer(nAttempts ~ exp1  + problem_id_nom  + (1 | user_id), data=byStudentWTime[!byStudentWTime$isAssessment,]))
+  
+  # Not really for assessment problems
+  summary(lmer(timeRevising ~ exp1 + (1 | user_id), data=byStudentWTime[byStudentWTime$isAssessment,]))
+  summary(lmer(nAttempts ~ exp1 + (1 | user_id), data=byStudentWTime[byStudentWTime$isAssessment,]))
+  
+  # But no difference in mean time per attempt
+  summary(lmer(meanAttemptTime ~ exp1  + problem_id_nom  + (1 | user_id), data=byStudentWTime[!byStudentWTime$isAssessment,]))
+  summary(lmer(firstTimeRevising ~ exp1  + problem_id_nom  + (1 | user_id), data=byStudentWTime[!byStudentWTime$isAssessment,]))
+  
+  # This is true of practice problems only
+  summary(lmer(timeRevising ~ exp1  + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime]))
+  summary(lmer(nAttempts ~ exp1  + problem_id_nom  + (1 | user_id), data=byStudentWTime))
+  
+  byStudentWTime$problem_name = " "
+  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==39, "39 - W7 Practice 1", byStudentWTime$problem_name)
+  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==59, "59 - W7 Practice 2", byStudentWTime$problem_name)
+  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==87, "87 - W7 Assessment-ish", byStudentWTime$problem_name)
+  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==180, "180 - W7 Assessment", byStudentWTime$problem_name)
+  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==64, "64 - W8 Practice 1", byStudentWTime$problem_name)
+  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==56, "56 - W8 Practice 2", byStudentWTime$problem_name)
+  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==62, "62 - W8 Assessment-ish", byStudentWTime$problem_name)
+  byStudentWTime$problem_name <- factor(byStudentWTime$problem_name, levels = c("39 - W7 Practice 1","59 - W7 Practice 2", "87 - W7 Assessment-ish", "180 - W7 Assessment", "64 - W8 Practice 1", "56 - W8 Practice 2", "62 - W8 Assessment-ish"))
+  
+  
+  statsTable <- ddply(byStudentWTime, c("problem_name", "exp"), summarize,
+        n=length(nAttempts), 
+        meanAttempts=mean(nAttempts), sdAttempts=sd(nAttempts), medianAttempts=median(nAttempts),
+        meanRevising=mean(timeRevising), sdRevising=sd(timeRevising), medianRevising=median(timeRevising),
+        spearman=cor(nAttempts, timeRevising, method="spearman"))
+  statsTable
+  # write.csv(statsTable, "C:/Users/twprice/Desktop/stats.csv")
+  
+  ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + scale_x_discrete(labels = c("Late", "Early")) + 
+    stat_summary(fun.y=mean, geom="point", shape="diamond", size=4, color="red", fill="red") +
+    scale_y_continuous(limits=c(0, 20)) + facet_wrap(~ problem_name, ncol = 4)
+  ggplot(byStudentWTime[byStudentWTime$nAttempts > 1 & !byStudentWTime$isAssessment,], aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + scale_x_discrete(labels = c("Late", "Early")) + 
+    stat_summary(fun.y=mean, geom="point", shape="diamond", size=4, color="red", fill="red") +
+    scale_y_continuous(limits=c(0, 20)) + facet_wrap(~ problem_name, ncol = 2)
+  
+  ggplot(byStudentWTime, aes(y=timeRevising, x=early)) + geom_boxplot() + geom_violin(width=0.2) + scale_x_discrete(labels = c("Late", "Early")) + 
+    stat_summary(fun.y=mean, geom="point", shape="diamond", size=4, color="red", fill="red") +
+    scale_y_continuous(limits=c(0, 20)) + facet_wrap(~ problem_name, ncol = 4)
+  
+  ggplot(byStudentWTime[byStudentWTime$firstTimeRevising > 0 & !byStudentWTime$isAssessment,], aes(y=firstTimeRevising, x=early)) + 
+    geom_boxplot() + geom_violin(width=0.2) + scale_x_discrete(labels = c("Late", "Early")) + 
+    stat_summary(fun.y=mean, geom="point", shape="diamond", size=4, color="red", fill="red") +
+    facet_wrap(~ problem_name, ncol = 4)
+  
+  
+  ggplot(byStudentWTime, aes(y=log(nAttempts+1), x=early)) + geom_boxplot() + geom_violin(width=0.2) + scale_x_discrete(labels = c("Late", "Early")) + scale_y_continuous(limits=c(0, 3)) + facet_wrap(~ problem_name, ncol = 4)
+  
+  ggplot(byStudentWTime, aes(y=meanAttemptTime, x=early)) + geom_boxplot() + geom_violin(width=0.2) + scale_x_discrete(labels = c("Late", "Early")) + scale_y_continuous(limits=c(0, 2)) + facet_wrap(~ problem_name, ncol = 4)
   
   ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_name) + scale_x_continuous(limits=c(0,10))
   ggplot(byStudentWTime, aes(log(timeRevising+1))) + geom_histogram() + facet_wrap(~ problem_name) + scale_x_continuous(limits=c(0,10))
+  
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==39)
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==59)
+  condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==87)
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==180)
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==56)
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==64)
@@ -243,10 +298,18 @@ dataAnalysis <- function(){
   
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==39)
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==59)
+  condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==87)
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==180)
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==56)
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==64)
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==62)
+  
+  condCompare(byStudentWTime$firstTimeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==39 & byStudentWTime$firstTimeRevising > 0)
+  condCompare(byStudentWTime$timeRevising - byStudentWTime$firstTimeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==39 & byStudentWTime$firstTimeRevising > 0)
+  
+  condCompare(byStudentWTime$firstTimeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==59 & byStudentWTime$firstTimeRevising > 0)
+  condCompare(byStudentWTime$firstTimeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==64 & byStudentWTime$firstTimeRevising > 0)
+  condCompare(byStudentWTime$firstTimeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==56 & byStudentWTime$firstTimeRevising > 0)
   
   (length((byStudentWTime$user_id[byStudentWTime$early & ( byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59)])))
   
@@ -651,6 +714,7 @@ estimateParameters <- function(attempts, problem_id){
       timeRevising = workingTime(userAttempts$timestamp),
       timeStopped = max(userAttempts$timestamp),
       timeStarted = min(userAttempts$timestamp),
+      firstTimeRevising = workingTime(userAttempts$timestamp[1:min(2, nrow(userAttempts))]),
       pCorrect = mean(userAttempts$correct),
       had_hints = any(userAttempts$had_hints[userAttempts$had_feedback]),
       had_selfExplain = any(userAttempts$showSelfExplain[userAttempts$showSelfExplain]),
@@ -683,7 +747,47 @@ estimatePriorAttempts <- function(attempts, problem_id){
   return (timePerProblem)
 }
 
+suveyAnalysis <- function() {
+  survey <- read.csv("~/GitHub/PCRSAnalysis/data/spring2020/suvey.csv")
+  survey <- survey[survey$consent_form == 1 & !is.na(survey$consent_form),]
+  survey <- survey[survey$thomas_seen == 1 & !is.na(survey$thomas_seen),]
+  
+  cor(survey[,267:(267+7)], use = "pairwise.complete.obs", method="spearman")
+  
+  hist(survey$thomas_rate_1)
+  mean(survey$thomas_rate_1, na.rm=T)
+  mean(survey$thomas_rate_1 > 3, na.rm=T)
+  mean(survey$thomas_rate_1 < 3, na.rm=T)
+  sum(!is.na(survey$thomas_rate_1))
+  
+  hist(survey$thomas_rate_2)
+  mean(survey$thomas_rate_2, na.rm=T)
+  mean(survey$thomas_rate_2 > 3, na.rm=T)
+  mean(survey$thomas_rate_2 < 3, na.rm=T)
+  
+  hist(survey$thomas_rate_3)
+  mean(survey$thomas_rate_3, na.rm=T)
+  mean(survey$thomas_rate_3 > 3, na.rm=T)
+  mean(survey$thomas_rate_3 < 3, na.rm=T)
 
-
-
+  hist(survey$thomas_rate_1)
+  mean(survey$thomas_rate_1, na.rm=T)
+  mean(survey$thomas_rate_1 > 3, na.rm=T)
+  
+  hist(survey$thomas_rate_1)
+  mean(survey$thomas_rate_1, na.rm=T)
+  mean(survey$thomas_rate_1 > 3, na.rm=T)
+  
+  hist(survey$thomas_rate_1)
+  mean(survey$thomas_rate_1, na.rm=T)
+  mean(survey$thomas_rate_1 > 3, na.rm=T)
+  
+  hist(survey$thomas_rate_1)
+  mean(survey$thomas_rate_1, na.rm=T)
+  mean(survey$thomas_rate_1 > 3, na.rm=T)
+  
+  hist(survey$thomas_rate_1)
+  mean(survey$thomas_rate_1, na.rm=T)
+  mean(survey$thomas_rate_1 > 3, na.rm=T)
+}
 

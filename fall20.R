@@ -9,84 +9,67 @@ library(car)
 library(stringr)
 
 
-
-
 GetData <- function(){
-  consentersExp <- read.csv("data/spring2020/pcrs_20200514/consenters.csv") # 111 consenters
-  consentersNonExp <- read.csv("data/spring2020/pcrs_exp20200514/consenters.csv") # 627 consenters
-  allAttempts_nonExp <- read.csv("data/spring2020/pcrs_20200514/pyandexpt.csv") # non-Exp 37052
-  allAttempts_Exp <- read.csv("data/spring2020/pcrs_exp20200514/pyandexpt.csv") # Exp 289203
+  folder = "data/fall2020/"
+  consenters <- read.csv(paste0(folder, "pcrs_20201116/consenters.csv")) # 1415 consenters
+  (length(unique(consenters$student_id)))
+  allAttempts <- read.csv(paste0(folder, "pcrs_20201116/pyandexpt.csv")) # 37052
+  (length(unique(allAttempts$user_id))) #total number of students: 2126
   
-  
-  ########## merge consenters #########
-  #####################################
-  (length(unique(consentersExp$student_id)))
-  (length(unique(consentersNonExp$student_id)))
-  common_consenters <- consentersNonExp[consentersNonExp$student_id %in% consentersExp$student_id, ] # 15 
-  consenters = rbind(consentersExp, consentersNonExp) #738
-  (length(unique(consenters$student_id))) # 723 unique consenter
-  
-  ######## merge students ############
+  ######## filter students ############
   ####################################
-  allAttempts_nonExp <- allAttempts_nonExp[allAttempts_nonExp$hashed_id %in% consenters$student_id,]
-  ### Length of all students in the nonExp
-  (length(unique(allAttempts_nonExp$user_id))) # 188 students
-  
-  allAttempts_Exp <- allAttempts_Exp[allAttempts_Exp$hashed_id %in% consenters$student_id,]
-  ### Length of all students in the Exp
-  (length(unique(allAttempts_Exp$user_id))) # 682 students
-  
-  commonStudents = allAttempts_nonExp[allAttempts_nonExp$hashed_id %in% allAttempts_Exp$hashed_id, ]
-  (length(unique(commonStudents$hashed_id))) # 147
-  missingStudents = allAttempts_Exp[!allAttempts_Exp$hashed_id %in% allAttempts_nonExp$hashed_id , ]
-  (length(unique(missingStudents$user_id))) # 535 students in the Exp and not in the nonExp.
-  
-  # to bind both Experimental and nonExperimental, I will add the two students who were not in the nonExp.
-  # I did not merge them all because of the duplicate rows, so this way is to avoid duplicates.
-  allAttempts = rbind(missingStudents, allAttempts_nonExp)
-  (length(unique(allAttempts$hashed_id))) # 723
+  allAttempts <- allAttempts[allAttempts$hashed_id %in% consenters$student_id,]
+  ### Length of all students
+  (length(unique(allAttempts$user_id))) # 1414 students
+  ## just double check
+  (length(unique(allAttempts$hashed_id))) # 1414
 }
 
 # all analysis is here. You need to GetData first.
 dataAnalysis <- function(){
-  length(unique(allAttempts$problem_id)) # 117 unique problems.
-  
+  length(unique(allAttempts$problem_id)) # 90 unique problems.
+
   # just get attempts of experiment problems 
-  attempts = allAttempts[allAttempts$problem_id==39 | allAttempts$problem_id==56 | allAttempts$problem_id==59
-                         | allAttempts$problem_id==62 | allAttempts$problem_id==64 | allAttempts$problem_id==180, ]
+  attempts = allAttempts[allAttempts$problem_id==39 | allAttempts$problem_id==59 | allAttempts$problem_id==64
+                         | allAttempts$problem_id==56 | allAttempts$problem_id==62 | allAttempts$problem_id == 183, ]
+  length(unique(attempts$user_id)) #1367
   
   # Samiha is just curious to know how many students solved each problem in the study
-  attempts180 = allAttempts[allAttempts$problem_id==180,]
-  length(unique(attempts180$user_id)) # 399 solved problem 180, [additional practice]
   attempts39 = allAttempts[allAttempts$problem_id==39,]
-  length(unique(attempts39$user_id)) # 515 solved problem 39, [avg daily temp]
+  length(unique(attempts39$user_id)) # 1335 solved problem 39, [average daily temo]
   attempts56 = allAttempts[allAttempts$problem_id==56,]
-  length(unique(attempts56$user_id)) # 494 solved problem 56, [reverse look up]
+  length(unique(attempts56$user_id)) # 1201 solved problem 56, [reverse look up (2) dict]
   attempts59 = allAttempts[allAttempts$problem_id==59,]
-  length(unique(attempts59$user_id)) # 499 solved problem 59, 
+  length(unique(attempts59$user_id)) # 1314 solved problem 59, [only evens] 
   attempts64 = allAttempts[allAttempts$problem_id==64,]
-  length(unique(attempts64$user_id)) # 504 solved problem 64, 
+  length(unique(attempts64$user_id)) # 1213 solved problem 64, [reverse look up (2) lists]
   attempts62 = allAttempts[allAttempts$problem_id==62,]
-  length(unique(attempts62$user_id)) # 493 solved problem 62,
+  length(unique(attempts62$user_id)) # 1189 solved problem 62, [Food Quantities]
+  attempts183 = allAttempts[allAttempts$problem_id==183,]
+  length(unique(attempts183$user_id)) # 1317 solved problem 62, [Food Quantities]
   
   (length(unique(attempts$problem_id))) # 6 problems
-  ### Length of students who attempted the 6 problems in the study: 563
-  (length(unique(attempts$user_id))) # 563 user. in the review: 801
-  # problems: 39 (1A with hints Early), 59 (with hints, Early), 180 (1B, first assessment)
-  #           56 (hints for late), 64 (hints for late), 62 (2nd assessment)
   table(attempts$problem_id) 
   
   allAttempts$timestamp <-as.POSIXct(allAttempts$timestamp, format="%Y-%m-%d %H:%M:%S")
   getTimeOfStudy = attempts
-  # There is only student who started solving the study problems 1 month and 6 days days earlier than others: 15883 2020-01-12 18:48:44
-  # # The estimated time of the start of the study "2020-01-12 18:48:44"
+  # # The estimated time of the start of the study "2020-10-17 18:48:44"
   getTimeOfStudy = getTimeOfStudy[order(getTimeOfStudy$timestamp), ]
+  attempts = attempts[order(attempts$timestamp), ]
+  attempts = attempts[attempts$timestamp>= "2020-10-17 16:08:56", ] # to remove 3 
+  #instances of master (not a student)
   allPriorAttempts = allAttempts[!allAttempts$problem_id %in% attempts$problem_id, ]
-  (length(unique(allPriorAttempts$user_id[allPriorAttempts$timestamp < "2020-02-22 12:29:05"]))/length(unique(allPriorAttempts$user_id)))
-  #when removing that student, data makes sense now. The start time is 2/22/20
-  allPriorAttempts = allPriorAttempts[allPriorAttempts$timestamp < "2020-02-22 12:29:05", ]
-  length(unique(allPriorAttempts$problem_id)) #  using the new date we got 83 problems
-  length(unique(allPriorAttempts$user_id)) # 257 unique user. using the new date we got 650 students
+  (length(unique(allPriorAttempts$user_id[allPriorAttempts$timestamp < "2020-10-17 16:08:56"]))
+    /length(unique(allPriorAttempts$user_id)))
+  allPriorAttempts = allPriorAttempts[allPriorAttempts$timestamp< "2020-10-17 16:08:56", ] # no change actually happened
+  length(unique(allPriorAttempts$problem_id)) #  we got 75 problems
+  length(unique(allPriorAttempts$user_id)) # 1412 unique user.
+  length(unique(allAttempts$user_id)) # 1414 unique user.
+  #The two students difference is because they did prior problems but in a time after the study,
+  #so they were excluded because attempts happened in problems other than the study problems at time
+  #of the study should not be priorAttempts
+  
+  unCommonStudents = allAttempts[!allAttempts$user_id %in% allPriorAttempts$user_id, ]
   allPriorAttempts$correct <- allPriorAttempts$score == allPriorAttempts$max_score # why we consider only prior problems where students got max score?
   start = TRUE
   for (problemID in unique(allPriorAttempts$problem_id)) {
@@ -98,55 +81,50 @@ dataAnalysis <- function(){
       priorAttempts = rbind(priorAttempts, problem_attempts)
     }
   }
-  (length(unique(priorAttempts$user_id)))
-  (length(unique(priorAttempts$problem_id))) # 81 prior problem.
+  (length(unique(priorAttempts$user_id))) #1412 student
+  (length(unique(priorAttempts$problem_id))) # 75 prior problem.
   #(length(unique(priorKnowledgeNotIn$user_id)))
   meanAttempts <- ddply(priorAttempts, c("problem_id"), summarize, mAttempts = mean(nAttempts), sdAttempt=sd(nAttempts))
   meanAttempts = meanAttempts[meanAttempts$sd!=0, ]
   priorAttempts <- merge(priorAttempts, meanAttempts)
   priorAttempts$zAttempts <- (priorAttempts$nAttempts - priorAttempts$mAttempts) / priorAttempts$sdAttempt
   priorKnowledge <- ddply(priorAttempts, "user_id", summarize, mz = mean(zAttempts), sdz=sd(zAttempts))
-  mean(priorKnowledge$mz) #0.0027
-  mean(priorKnowledge$sdz) #NA
+  mean(priorKnowledge$mz) #0.0057
+  mean(priorKnowledge$sdz) #0.7953
   priorKnowledge$highPK <- priorKnowledge$mz < median(priorKnowledge$mz)
-  table(priorKnowledge$highPK) #(using new date, we got 325 in each group)
+  table(priorKnowledge$highPK) #(we got 706 in each group)
   priorKnowledge <- priorKnowledge[priorKnowledge$user_id %in% attempts$user_id,]
  # priorKnowledgeNotIn <- priorKnowledge[!priorKnowledge$user_id %in% attempts$user_id,]
   priorKnowledge$pkRank <- rank(priorKnowledge$mz)
-  length(unique(priorKnowledge$user_id)) #(using new date: 552)
-  length(unique(attempts$user_id)) #563
+  length(unique(priorKnowledge$user_id)) #(using new date: 1366)
+  length(unique(attempts$user_id)) #1366
   # merge takes the matching users only between priorAttempts and all users
   attempts <- merge(attempts, priorKnowledge) 
-  length(unique(attempts$user_id)) #(using new date: 552)
-  #attempts2 <- merge(attempts, priorKnowledgeNotIn) 
-  
-  ## just to verify
-  #################
-  priorAttempts <- priorAttempts[priorAttempts$user_id %in% attempts$user_id,]
-  length(unique(priorAttempts$problem_id)) # There are 81 problems
-  priorAttempts2 <- ddply(priorAttempts, "user_id", summarize, nProblems = length(problem_id))
-  summary(priorAttempts2$nProblems)
-  hist(priorAttempts2$nProblems)
-  
+  length(unique(attempts$user_id)) #(using new date: 1365)
+  length(unique(attempts$user_id[attempts$highPK])) #683
+  length(unique(attempts$user_id[!attempts$highPK])) #683
   
   #if feedback = null this means they were not assigned to a condition
   attempts$had_feedback <- attempts$feedback_text != ""
   (length(unique(attempts$user_id)))
-  #False if showHints  = false, NA if feedback_text = ""
+  #False if showHints  = false, NA if feedback_text = "". It shows if students were in the exp group or not.
   attempts$had_hints <- ifelse(attempts$had_feedback, grepl("'showHints': True", attempts$feedback_text, fixed=T), NA)
   attempts$reverse <- ifelse(attempts$had_feedback, grepl("'reversedShow': True", attempts$feedback_text, fixed=T), NA)
-  attempts$saw_hint <- ifelse(attempts$had_feedback, grepl("'hadCodeSuggestion': True", attempts$feedback_text, fixed=T), NA)
+  # this show that a student had hint
+  attempts$had_old_hints <- ifelse(attempts$had_feedback, grepl("'hadCodeSuggestion': True", attempts$feedback_text, fixed=T), NA)
+  attempts$had_skeletonHints <- ifelse(attempts$had_feedback, grepl("'hadSkeletonHints': True", attempts$feedback_text, fixed=T), NA)
+  
   # Reverse was False for the first 2 problems, but True for 5 and 6, so if you had hints when reverse was false, you were in the early group
   attempts$early <- ifelse(attempts$had_feedback, attempts$had_hints != attempts$reverse, NA)
   attempts$correct <- attempts$score == attempts$max_score
-  attempts$suggest <- ifelse(attempts$had_hints, grepl("'suggest': True", attempts$feedback_text, fixed=T), NA)
-  attempts$hLevelInt <- ifelse(attempts$had_hints, grepl("'highlightLevelInt': 2", attempts$feedback_text, fixed=T), NA)
-  attempts$showMissing <- ifelse(attempts$had_hints, grepl("'showMissing': True", attempts$feedback_text, fixed=T), NA)
+  attempts$suggest <- ifelse(attempts$had_old_hints, grepl("'suggest': True", attempts$feedback_text, fixed=T), NA)
+  attempts$hLevelInt <- ifelse(attempts$had_old_hints, grepl("'highlightLevelInt': 2", attempts$feedback_text, fixed=T), NA)
+  attempts$showMissing <- ifelse(attempts$had_old_hints, grepl("'showMissing': True", attempts$feedback_text, fixed=T), NA)
   attempts$showSelfExplain <- ifelse(attempts$had_hints, grepl("'showSelfExplain': True", attempts$feedback_text, fixed=T), NA)
-  (length(unique(attempts$user_id[attempts$early==TRUE]))) #(using new date: 238)
-  (length(unique(attempts$user_id[attempts$early==FALSE]))) #(using new date: 233)
+  (length(unique(attempts$user_id[attempts$early==TRUE]))) #(using new date: 654)
+  (length(unique(attempts$user_id[attempts$early==FALSE]))) #(using new date: 706)
   prettyAttempts = attempts[, c("user_id", "timestamp", "score", "problem_id", "name.2", "feedback_text",
-                                "max_score", "mz", "highPK", "had_feedback", "had_hints", "reverse", "early",
+                                "max_score", "mz", "highPK", "had_feedback", "had_hints", "had_old_hints", "had_skeletonHints", "reverse", "early",
                                 "correct", "showMissing", "showSelfExplain")]
   prettyAttempts = prettyAttempts[order(prettyAttempts$problem_id), ]
   prettyAttempts = prettyAttempts[order(prettyAttempts$user_id), ]
@@ -161,17 +139,17 @@ dataAnalysis <- function(){
   attempts = attempts[order(attempts$timestamp), ]
   attempts$bestScore = ifelse(attempts$has_best_score=="t", TRUE, FALSE)
   #39 (1A with hints Early), 56 (hints for late), 59 (with hints, Early), 
-  #62 (2nd assessment), 64 (hints for late), 180 (1B, first assessment)
+  #62 (2nd assessment), 64 (hints for late), 183 (1B, first assessment)
   
-  problem1_attempts <- estimateParameters(attempts, 39) # Week 7
+  problem1_attempts <- estimateParameters(attempts, 39) # Week 6
   problem2_attempts <- estimateParameters(attempts, 56)  # Week 8
-  problem3_attempts <- estimateParameters(attempts, 59) # Week 7
-  problem4_attempts <- estimateParameters(attempts, 62) # -- not mentioned
+  problem3_attempts <- estimateParameters(attempts, 59) # Week 6
+  problem4_attempts <- estimateParameters(attempts, 62) # -- assessment Week 8
   problem5_attempts <- estimateParameters(attempts, 64) #Week 8
-  problem6_attempts <- estimateParameters(attempts, 180) # --
+  problem6_attempts <- estimateParameters(attempts, 183) #Week 6 assessment
   
   attemptsTime = rbind(problem1_attempts, problem2_attempts, problem3_attempts, problem4_attempts, problem5_attempts, problem6_attempts)
-  length(unique(attemptsTime$user_id))
+  length(unique(attemptsTime$user_id)) #1366
   attemptsTime <- merge(attemptsTime, priorKnowledge)
   
   students <- ddply(attempts, "user_id", summarize,
@@ -181,38 +159,46 @@ dataAnalysis <- function(){
                     pHints = mean(had_hints[had_feedback]),
                     early = if (pFeedback == 0) NA else any(early, na.rm=T),
                     suggest = any(suggest, na.rm=TRUE),
+                    had_old_hints = any(had_old_hints, na.rm=TRUE),
+                    skeletonHints = any(had_skeletonHints, na.rm=TRUE),
                     hLevelInt = any(hLevelInt, na.rm=TRUE),
                     showMissing = any(showMissing, na.rm=TRUE),
                     showSelfExplain = any(showSelfExplain, na.rm=TRUE)
   )
   byStudentWTime <- merge(students, attemptsTime) #(new date: 2872)
-  # 17.2% of students had early NA
+  (length(unique(byStudentWTime$user_id))) #1366
+  # 0.5% of students had early NA
   length(unique(byStudentWTime$user_id[is.na(byStudentWTime$early)]))/length(unique(byStudentWTime$user_id))
   (mean(byStudentWTime$pCorrect[byStudentWTime$pCorrect>0]))
-  byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),] #(2441)
-  ##### length of students in the early group:  (237)
+  byStudentWTime <- byStudentWTime[!is.na(byStudentWTime$early),] #(7548) , 1358 students
+  ##### length of students in the early group:  (653)
   (length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE])))
-  ##### length of students in the late group: (220)
+  ##### length of students in the late group: (705)
   (length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE])))
   ##########################
   byStudentWTime$mLnTime <- log(byStudentWTime$timeRevising + 1)
+  #not sure if the exp here is calculated correctly
   byStudentWTime$exp <- byStudentWTime$early == (byStudentWTime$problem_id == 39 | byStudentWTime$problem_id == 59)
   byStudentWTime$firstCorrect <- byStudentWTime$pCorrect == 1
   byStudentWTime$problem_id_nom <- as.factor(byStudentWTime$problem_id)
-  byStudentWTime$isAssessment = ifelse(byStudentWTime$problem_id==62 | byStudentWTime$problem_id==180, TRUE, FALSE)
+  byStudentWTime$isAssessment = ifelse(byStudentWTime$problem_id==62 | byStudentWTime$problem_id==183, TRUE, FALSE)
   byStudentWTime$week = ifelse(byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59, 0, 1)
-  byStudentWTime$week = ifelse(byStudentWTime$problem_id==62 | byStudentWTime$problem_id==180, 2, byStudentWTime$week)
+  byStudentWTime$week = ifelse(byStudentWTime$problem_id==62 | byStudentWTime$problem_id==183, 2, byStudentWTime$week)
   
   #the number of attempts correlates strongly (and significant) with the total \textit{time} a student spent on the problem
   cor.test(byStudentWTime$nAttempts, byStudentWTime$timeRevising, method = "spearman")
   
   byStudent39 <- byStudentWTime[byStudentWTime$problem_id == 39,]
-  # Oddly, no difference in firstCorrect between high and low PK
+  # significant difference in firstCorrect between high and low PK
   chisq.test(byStudent39$firstCorrect, byStudent39$highPK)
-  ## high PK = 216, low PK: 211
+  ## high PK = 664, low PK: 666
   (length(unique(byStudent39$user_id[!byStudent39$highPK])))
   # a significant difference in total attempts ( p = 0.00)
   condCompare(byStudent39$nAttempts, byStudent39$highPK) 
+  condCompare(byStudent39$nAttempts, byStudent39$early) #it was less but not significant
+  condCompare(byStudent39$nAttempts, byStudent39$skeletonHints) #significant, with skeletons they had more attempts
+  condCompare(byStudent39$nAttempts, byStudent39$had_old_hints) #significant, with hints they had more attempts
+  
   # And a small but significant correlation
   cor.test(byStudent39$nAttempts, byStudent39$mz, method = "spearman")
   # No significant difference in # of highPK students in each group
@@ -227,7 +213,6 @@ dataAnalysis <- function(){
   chisq.test(byStudent39$firstCorrect, byStudent39$early)
   # No significant differences in firstCorrect between the two groups ( p =1)
   chisq.test(byStudent39$firstCorrect[byStudent39$highPK], byStudent39$early[byStudent39$highPK])
-  # marginally significant
   chisq.test(byStudent39$firstCorrect[!byStudent39$highPK], byStudent39$early[!byStudent39$highPK]) 
   table(byStudentWTime$early[byStudentWTime$problem_id==39])
   
@@ -241,42 +226,50 @@ dataAnalysis <- function(){
   byStudentWTime$problem_name = " "
   byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==39, "39 - 1 Practice", byStudentWTime$problem_name)
   byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==59, "59 - 2 Practice", byStudentWTime$problem_name)
-  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==180, "180 - 1 Assessment", byStudentWTime$problem_name)
+  byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==183, "183 - 1 Assessment", byStudentWTime$problem_name)
   byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==64, "64 - 3 Practice", byStudentWTime$problem_name)
   byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==56, "56 - 4 Practice", byStudentWTime$problem_name)
   byStudentWTime$problem_name = ifelse(byStudentWTime$problem_id==62, "62 - 2 Assessment", byStudentWTime$problem_name)
-  byStudentWTime$problem_name <- factor(byStudentWTime$problem_name, levels = c("39 - 1 Practice","59 - 2 Practice", "180 - 1 Assessment", "64 - 3 Practice", "56 - 4 Practice", "62 - 2 Assessment"))
+  byStudentWTime$problem_name <- factor(byStudentWTime$problem_name, levels = c("39 - 1 Practice","59 - 2 Practice", "183 - 1 Assessment", "64 - 3 Practice", "56 - 4 Practice", "62 - 2 Assessment"))
   
   ggplot(byStudentWTime, aes(y=nAttempts, x=early)) + geom_boxplot() + geom_violin(width=0.2) + scale_x_discrete(labels = c("Late", "Early")) + facet_wrap(~ problem_name)
   
   ggplot(byStudentWTime, aes(timeRevising)) + geom_histogram() + facet_wrap(~ problem_name) + scale_x_continuous(limits=c(0,10))
   ggplot(byStudentWTime, aes(log(timeRevising+1))) + geom_histogram() + facet_wrap(~ problem_name) + scale_x_continuous(limits=c(0,10))
+  #less but not significant [avg daily]
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==39)
+  # early: 639 and they spent significantly less attempts [only evens]
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==59)
-  condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==180)
+  condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==183)
+  #early: 584, marginally significant [reverse lookup]
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==56)
+  # less but not not significant
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==64)
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter = byStudentWTime$problem_id==62)
   
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==39)
+  #significant
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==59)
-  condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==180)
+  condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==183)
+  #significant
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==56)
+  #significant
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==64)
   condCompare(byStudentWTime$timeRevising, byStudentWTime$early, filter = byStudentWTime$problem_id==62)
   
   (length((byStudentWTime$user_id[byStudentWTime$early & ( byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59)])))
   
-  ## students almost always got the problem correct \textit{eventually} (96.77\% of the time)
+  ## students almost always got the problem correct \textit{eventually} (96.76\% of the time)
   (mean(byStudentWTime$pCorrect > 0))
   
   # Replicating RQ1 analysis (AIED'20)======
   #=========================================
-  (length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE]))) # 237
-  (length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE]))) # 220
+  (length(unique(byStudentWTime$user_id[byStudentWTime$early==TRUE]))) # 653
+  (length(unique(byStudentWTime$user_id[byStudentWTime$early==FALSE]))) # 705
   # Table 1 in the paper
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 39)
   # length of students who completed this problem eventually
+  (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==39 & byStudentWTime$early==TRUE])))
   (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==39 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
   (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==39 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
   
@@ -286,9 +279,9 @@ dataAnalysis <- function(){
   (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==59 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
   
   
-  condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 180)
-  (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==180 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
-  (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==180 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
+  condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 183)
+  (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==183 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
+  (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==183 & byStudentWTime$early==FALSE & byStudentWTime$pCorrect>0])))
   
   condCompare(byStudentWTime$nAttempts, byStudentWTime$early, filter=byStudentWTime$problem_id == 64)
   (length(unique(byStudentWTime$user_id[byStudentWTime$problem_id==64 & byStudentWTime$early==TRUE & byStudentWTime$pCorrect>0])))
@@ -333,7 +326,7 @@ dataAnalysis <- function(){
   
   pkStats$Prior_Knowledge = ifelse(pkStats$highPK==TRUE, "High", "Low")
   
-  P39Plot = ggplot(pkStats[pkStats$problem_id == 39,], aes(y=pFirstCorrect, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
+  P39Plot = ggplot(pkStats[pkStats$problem_id == 39,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
     geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) + 
     theme(legend.position = "none") + scale_x_discrete(labels = c("Late", "Early"))+
     theme(axis.title.x=element_blank(),
@@ -351,7 +344,7 @@ dataAnalysis <- function(){
           axis.ticks.y=element_blank()
     )
   
-  P180Plot = ggplot(pkStats[pkStats$problem_id == 180,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
+  P183Plot = ggplot(pkStats[pkStats$problem_id == 183,], aes(y=mAttempts, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
     geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mAttempts-seAttempts, ymax=mAttempts+seAttempts)) +
     theme(legend.position = "none") + scale_x_discrete(labels = c("Late", "Early"))+
     theme(axis.title.x=element_blank(),
@@ -383,7 +376,7 @@ dataAnalysis <- function(){
           axis.title.y=element_blank(),
           axis.ticks.y=element_blank())
   
-  figure = ggarrange(P39Plot, P59Plot, P180Plot, P64Plot, P56Plot, P62Plot,
+  figure = ggarrange(P39Plot, P59Plot, P183Plot, P64Plot, P56Plot, P62Plot,
                      labels = c("1Practice", "2Practice", "1Assessment", "3Practice", "4Practice", "2Assessment"),
                      ncol = 3, nrow = 2,
                      common.legend = TRUE,
@@ -416,7 +409,7 @@ dataAnalysis <- function(){
     )
   #plot(P59PlotT)
   
-  P180PlotT = ggplot(pkStats[pkStats$problem_id == 180,], aes(y=mTime, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
+  P183PlotT = ggplot(pkStats[pkStats$problem_id == 183,], aes(y=mTime, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
     geom_errorbar(position=position_dodge(width=0.2), aes(ymin=mTime-seTime, ymax=mTime+seTime)) +
     theme(legend.position = "none") + scale_x_discrete(labels = c("Late", "Early"))+
     theme(axis.title.x=element_blank(),
@@ -450,7 +443,7 @@ dataAnalysis <- function(){
           axis.title.y=element_blank(),
           axis.ticks.y=element_blank())
   
-  figureT = ggarrange(P39PlotT, P59PlotT, P180PlotT, P64PlotT, P56PlotT, P62PlotT,
+  figureT = ggarrange(P39PlotT, P59PlotT, P183PlotT, P64PlotT, P56PlotT, P62PlotT,
                      labels = c("1Practice", "2Practice", "1Assessment", "3Practice", "4Practice", "2Assessment"),
                      ncol = 3, nrow = 2,
                      common.legend = TRUE,
@@ -461,20 +454,19 @@ dataAnalysis <- function(){
                   bottom = text_grob("Average Revising Time", color = "blue", face = "bold", size = 10)
   )
   
-  
   # End RQ2 =====
   
   byStudentWTime$problemID = 1
   byStudentWTime$problemID = ifelse(byStudentWTime$problem_id == 59, 2, byStudentWTime$problemID)
-  byStudentWTime$problemID = ifelse(byStudentWTime$problem_id == 180, 3, byStudentWTime$problemID)
+  byStudentWTime$problemID = ifelse(byStudentWTime$problem_id == 183, 3, byStudentWTime$problemID)
   byStudentWTime$problemID = ifelse(byStudentWTime$problem_id == 64, 4, byStudentWTime$problemID)
   byStudentWTime$problemID = ifelse(byStudentWTime$problem_id == 56, 5, byStudentWTime$problemID)
   byStudentWTime$problemID = ifelse(byStudentWTime$problem_id == 62, 6, byStudentWTime$problemID)
   
   # Not considering the interaction, there's a significant of PK
-  anova(m1 <- lmer(nAttempts ~ exp + highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[ byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59 |  byStudentWTime$problem_id==180 | byStudentWTime$problem_id==52 | byStudentWTime$problem_id==56 | byStudentWTime$problem_id==64 ,]), type="III")
+  anova(m1 <- lmer(nAttempts ~ exp + highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[ byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59 |  byStudentWTime$problem_id==183 | byStudentWTime$problem_id==62 | byStudentWTime$problem_id==56 | byStudentWTime$problem_id==64 ,]), type="III")
   #There is a significant interaction effect between experimental and high prior knowledge
-  anova(m2 <- lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59 |  byStudentWTime$problem_id==180 | byStudentWTime$problem_id==52 | byStudentWTime$problem_id==56 | byStudentWTime$problem_id==64 ,]), type="III")
+  anova(m2 <- lmer(nAttempts ~ exp * highPK + problem_id_nom + (1 | user_id), data=byStudentWTime[byStudentWTime$problem_id==39 | byStudentWTime$problem_id==59 |  byStudentWTime$problem_id==183 | byStudentWTime$problem_id==62 | byStudentWTime$problem_id==56 | byStudentWTime$problem_id==64 ,]), type="III")
   # But the interaction model is significantly better
   anova(m1, m2)
   
@@ -500,9 +492,9 @@ dataAnalysis <- function(){
   condCompare((byStudent59$pCorrect == 1) + 0, byStudent59$highPK, filter=byStudent59$early)
   condCompare((byStudent59$pCorrect == 1) + 0, byStudent59$highPK, filter=!byStudent59$early)
   
-  byStudent180 <- byStudentWTime[byStudentWTime$problem_id == 180,]
-  condCompare((byStudent180$pCorrect == 1) + 0, byStudent180$highPK, filter=byStudent180$early)
-  condCompare((byStudent180$pCorrect == 1) + 0, byStudent180$highPK, filter=!byStudent180$early)
+  byStudent180 <- byStudentWTime[byStudentWTime$problem_id == 183,]
+  condCompare((byStudent183$pCorrect == 1) + 0, byStudent183$highPK, filter=byStudent183$early)
+  condCompare((byStudent183$pCorrect == 1) + 0, byStudent183$highPK, filter=!byStudent183$early)
   
   byStudent56 <- byStudentWTime[byStudentWTime$problem_id == 56,]
   condCompare((byStudent56$pCorrect == 1) + 0, byStudent56$highPK, filter=byStudent56$early)
@@ -536,8 +528,8 @@ dataAnalysis <- function(){
           axis.ticks.y=element_blank()
     )
   
-  #plot(P173Plot)
-  P180Plot2 = ggplot(pkStats[pkStats$problem_id == 180,], aes(y=pFirstCorrect, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
+  #plot(P183Plot)
+  P183Plot2 = ggplot(pkStats[pkStats$problem_id == 183,], aes(y=pFirstCorrect, x=early, linetype=Prior_Knowledge, group= Prior_Knowledge)) + geom_line(position=position_dodge(width=0.2)) +
     theme(legend.position = "none") + scale_x_discrete(labels = c("Late", "Early"))+
     theme(axis.title.x=element_blank(),
           axis.ticks.x=element_blank(),
@@ -567,7 +559,7 @@ dataAnalysis <- function(){
           axis.title.y=element_blank(),
           axis.ticks.y=element_blank())
   
-  figure = ggarrange(P39Plot2, P59Plot2, P180Plot2, P64Plot2, P56Plot2, P62Plot2,
+  figure = ggarrange(P39Plot2, P59Plot2, P183Plot2, P64Plot2, P56Plot2, P62Plot2,
                      labels = c("1Practice", "2Practice", "1Assessment", "3Practice", "4Practice", "2Assessment"),
                      ncol = 3, nrow = 2,
                      common.legend = TRUE,
@@ -581,77 +573,10 @@ dataAnalysis <- function(){
   
   Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 39,]), type="III")
   Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 59,]), type="III")
-  Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 180,]), type="III")
+  Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 183,]), type="III")
   Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 64,]), type="III")
   Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 56,]), type="III")
   Anova(lm(nAttempts ~ exp * highPK, data=byStudentWTime[byStudentWTime$problem_id == 62,]), type="III")
-  
-}
-
-getSurveyData <- function(){
-  #final_survey <- read.csv("data/spring2020/final_survey.csv") # 932 objs
-  mappingSurvey <- read.csv("data/spring2020/Final_survey_hash_mapping.csv") # 907 objs
-  mappingSurvey = mappingSurvey[order(mappingSurvey$ResponseId), ]
-  hashedIDSurvey <- read.csv("data/spring2020/Final_survey_hash_mapping_stripped_data.csv") # 907 objs
-  hashedIDSurvey = hashedIDSurvey[order(hashedIDSurvey$ResponseId), ]
-  CombinedSurveyData = merge(mappingSurvey, hashedIDSurvey, by.y = "ResponseId")
-  surveyFiltered = CombinedSurveyData[CombinedSurveyData$hashed_id %in% attempts$hashed_id, ] #515 objs
-  write.csv(surveyFiltered, "surveyFiltered.csv")
-  (length(unique(surveyFiltered$hashed_id))) #503 student
-  prettySurvey = surveyFiltered[, c("hashed_id", "ResponseId", "Q193", "Q194", "Q195", "Q197", "Q198")]
-  prettySurvey = prettySurvey[prettySurvey$Q193 == 1, ]
-  write.csv(prettySurvey, "prettySurveyFiltered.csv")
-}
-
-additionalAnalysis <- function(){
-  sampleTest <- read.csv("prettyAttempts2.csv") # 111 consenters
-  (length(unique(sampleTest$user_id))) # # 457 consenters
-  
-  # problems: 
-  # 39 (1A with hints Early - avg early temp), 59 (with hints, Early - only evens), 180 (1B, first assessment)
-  # 56 (hints for late), 64 (hints for late), 62 (2nd assessment)
-  
-  p39 = sampleTest[sampleTest$problem_id==39, ]
-  p39$hadCodeSuggestion <- ifelse(p39$had_feedback, grepl("'hadCodeSuggestion': True", p39$feedback_text, fixed=T), NA)
-  p39= p39[p39$hadCodeSuggestion==TRUE, ]
-  p39 = p39[order(p39$user_id), ]
-  p39 <- p39[order(p39$timestamp), ]
-  set.seed(1124)
-  p39_sample = p39[sample(nrow(p39), 2), ]
-  p39_test_sample = p39[p39$user_id %in% p39_sample$user_id, ]
-  #write.csv(p39_test_sample, "p39_test_sample2.csv")
-  
-  #p39_test_sample$nInsert <- ifelse(p39_test_sample$had_feedback, grepl("class=\"insertion\"", p39_test_sample$feedback_text, fixed=T), NA)
-  p39_test_sample$nInsert = str_count(p39_test_sample$feedback_text, pattern = "class=\"insertion\"")
-  p39_test_sample$nDeletion = str_count(p39_test_sample$feedback_text, pattern = "class=\"deletion\"")
-  p39_test_sample$nReplacement = str_count(p39_test_sample$feedback_text, pattern = "class=\"replacement\"")
-  p39_test_sample$nHints = p39_test_sample$nInsert + p39_test_sample$nDeletion + p39_test_sample$nReplacement
-  
-  #How to know if hints were followed?
-  
-}
-
-#Use this function if you want to do analysis for Review data, skip it otherwise
-ReviewAnalysis <- function(){
-  allAttempts_review = read.csv("data/spring2020/pcrs_v220200514/pyandexpt.csv")
-  consenters_review = read.csv("data/spring2020/pcrs_v220200514/consenters.csv") #702
-  ########## merge consenters #########
-  #####################################
-  (length(unique(allAttempts_review$user_id))) # 987
-  (length(unique(consenters_review$student_id))) #702
-  #529
-  common_consenters <- consenters[consenters$student_id %in% consenters_review$student_id, ] # 15 
-  consenters = rbind(consenters_review, consenters) #738
-  (length(unique(consenters$student_id))) # 908 unique consenter
-  
-  ######## merge students ############
-  ####################################
-  allAttempts_review <- allAttempts_review[allAttempts_review$hashed_id %in% consenters$student_id,]
-  ### Length of all students in the nonExp
-  (length(unique(allAttempts_review$user_id))) # 839 students
-  length(unique(allAttempts_review$problem_id)) # 134 unique problems.
-  
-  allAttempts = allAttempts_review
   
 }
 

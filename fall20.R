@@ -190,6 +190,7 @@ dataAnalysis <- function(){
   byStudentWTime$nHints = byStudentWTime$nSkeletonHints+byStudentWTime$nOldHints
   byStudentWTime$percSkeleton = byStudentWTime$nSkeletonHints/byStudentWTime$nHints
   byStudentWTime$percOldHints = byStudentWTime$nOldHints/byStudentWTime$nHints
+  
   #the number of attempts correlates strongly (and significant) with the total \textit{time} a student spent on the problem
   cor.test(byStudentWTime$nAttempts, byStudentWTime$timeRevising, method = "spearman")
   
@@ -338,7 +339,19 @@ dataAnalysis <- function(){
   
   #Of those, what percent of the total hints were skeleton hints
   #Or, calculate this for each student, and then plot the distribution of # of code hints and # of skeleton hints
+  hist(byStudent39$percOldHints)
+  hist(byStudent39$percSkeleton)
   
+  hist(byStudent59$percOldHints)
+  hist(byStudent59$percSkeleton)
+  
+  hist(byStudent64$percOldHints)
+  hist(byStudent64$percSkeleton)
+  
+  hist(byStudent56$percOldHints)
+  hist(byStudent56$percSkeleton)
+  
+
   #===================================================================================
   
   
